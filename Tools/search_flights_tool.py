@@ -56,7 +56,7 @@ async def fetch_page(url: str) -> Tuple[async_playwright, Browser, Page]:
 
     # Load more results if the button exists, until "No more results" is visible
     clicks = 0
-    MAX_LOAD_MORE_CLICKS = 10  # Limit to prevent infinite loop
+    MAX_LOAD_MORE_CLICKS = 3  # Limit to prevent infinite loop
     while not await page.locator('div[data-test="NoMoreResults"]').is_visible():
         await wait_for_element_to_appear(page, '[data-test="ResultCardWrapper"]', timeout_ms=30000)
 
