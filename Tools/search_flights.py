@@ -118,32 +118,83 @@ async def fill_destination(page: Page, destination: str):
         print(f"❌ Error filling destination: {e}")
 
 
-async def set_departure_date(page: Page, date: str= "July 15"):
+async def set_dates(page: Page, departure_date: str= "July 15", flight_type: str = "One way", return_date: Optional[str] = None):
     """ Sets the departure date in the date picker.
     Args:
         page (Page): The Playwright page instance.
-        date (str): The departure date. (e.g., July 15)
+        departure_date (str): The departure date. (e.g., July 15)
+        flight_type (str): Type of flight ("One way" or "Round trip").
+        return_date (Optional[str]): The return date if flight_type is "Round trip". Defaults to None.
     """
     try:
-        await wait_for_element_to_appear(page, "input[aria-label='Departure']", timeout_ms=10000)
-        await page.locator("input[aria-label='Departure']").nth(0).click()
-        await page.locator("input[aria-label='Departure']").nth(1).fill(date)
-        await page.keyboard.press("Enter")
-        await page.keyboard.press("Enter")
-        print("✅ Departure date set successfully.")
+        departure_selector = "input[aria-label='Departure']"
+        await wait_for_element_to_appear(page, departure_selector, timeout_ms=10000)
+        if flight_type == "One way":
+            await page.locator(departure_selector).nth(0).click()
+            await page.locator(departure_selector).nth(1).fill(departure_date)
+            await page.keyboard.press("Enter")
+            await page.keyboard.press("Enter")
+            print("✅ Departure date set successfully.")
+        elif flight_type == "Round trip":
+            await page.locator(departure_selector).nth(0).click()
+            await page.locator(departure_selector).nth(1).fill(departure_date)
+            if return_date:
+                await page.keyboard.press("Tab")
+                return_date_selector = "input[aria-label='Return']"
+                await page.locator(return_date_selector).nth(1).fill(return_date)
+                print("✅ Departure and return dates set successfully.")
+            else:
+                print("⚠️ No return date provided, using default.")
+            await page.keyboard.press("Enter")
+            await page.keyboard.press("Enter")
     except Exception as e:
-        print(f"❌ Error setting departure date: {e}")
-    
+        print(f"❌ Error setting departure or return date: {e}")
 
-async def get_flight_cards():
+
+async def set_number_of_passengers(
+        page: Page, adults: int = 1, 
+        children: int = 0, infants_on_lap: int = 0, 
+        infants_in_seat: int = 0
+    ):
+    """ Sets the number of passengers in the flight search.
+    Args:
+        page (Page): The Playwright page instance.
+        adults (int): Number of adults.
+        children (int): Number of children.
+        infants_on_lap (int): Number of infants on lap.
+        infants_in_seat (int): Number of infants in seat.
+    """
+    try:
+        passenger_selector = "div[aria-label='Number of passengers']"
+        await wait_for_element_to_appear(page, passenger_selector, timeout_ms=10000)
+        await page.locator(passenger_selector).click()
+        print("✅ Passenger selection menu opened.")
+    except Exception as e:
+        print(f"❌ Error setting number of passengers: {e}")
+        raise e
+    
+    
+async def get_flight_cards(
+    flight_type: str = "One way",
+    flight_class: str = "First",
+    origin: str = "New York",
+    destination: str = "Los Angeles",
+    departure_date: str = "July 15",
+    return_date: Optional[str] = None,
+    adults: int = 1,
+    children: int = 0,
+    infants_on_lap: int = 0,
+    infants_in_seat: int = 0
+):
     BASE_URL = "https://www.google.com/travel/flights"
     playwright, browser, page = await fetch_page(BASE_URL)
     print("✅ Page loaded successfully.")
-    await select_flight_type(page, "One way")
-    await select_flight_class(page, "First")
-    await fill_origin(page, "New York")
-    await fill_destination(page, "Los Angeles")
-    await set_departure_date(page, "July 15")
+    await select_flight_type(page, "Round trip")
+    await select_flight_class(page, flight_class)
+    await fill_origin(page, origin)
+    await fill_destination(page, destination)
+    await set_dates(page, departure_date,return_date="July 20", flight_type="Round trip")
+    # await set_number_of_passengers(page, adults=1)
     await browser.close()
     await playwright.stop()
 
