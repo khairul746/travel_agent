@@ -99,7 +99,6 @@ async def fill_origin(page: Page, origin: str):
         print(f"❌ Error filling origin: {e}")
 
 
-
 async def fill_destination(page: Page, destination: str):
     """ Fills the destination input field with the specified destination.
     Args:
@@ -118,7 +117,7 @@ async def fill_destination(page: Page, destination: str):
         print(f"❌ Error filling destination: {e}")
 
 
-async def set_dates(page: Page, departure_date: str= "July 15", flight_type: str = "One way", return_date: Optional[str] = None):
+async def set_dates(page: Page, departure_date: str, flight_type: str, return_date: Optional[str] = None):
     """ Sets the departure date in the date picker.
     Args:
         page (Page): The Playwright page instance.
@@ -164,23 +163,48 @@ async def set_number_of_passengers(
         infants_on_lap (int): Number of infants on lap.
         infants_in_seat (int): Number of infants in seat.
     """
+    passengers = {
+        "adult": adults,
+        "child": children,
+        "infant in seat": infants_in_seat,
+        "infant on lap": infants_on_lap
+    }
     try:
-        passenger_selector = "div[aria-label='Number of passengers']"
+        passenger_selector = "div.VfPpkd-RLmnJb" #ow14 > div.cQnuXe.k0gFV > div > button > 
         await wait_for_element_to_appear(page, passenger_selector, timeout_ms=10000)
-        await page.locator(passenger_selector).click()
-        print("✅ Passenger selection menu opened.")
+        await page.get_by_role("button", name="1 passenger, change number of").click()
+        for passenger_type, count in passengers.items():
+            if count > 0:
+                num = 1 if passenger_type == "adult" else 0
+                while num < count:
+                    await page.locator(f"button[aria-label='Add {passenger_type}']").click()
+                    num += 1
+        await page.get_by_role("button", name="Done").click() # close the passenger menu
+        print("✅ Number of passengers set successfully.")
     except Exception as e:
         print(f"❌ Error setting number of passengers: {e}")
-        raise e
     
-    
-async def get_flight_cards(
-    flight_type: str = "One way",
-    flight_class: str = "First",
-    origin: str = "New York",
-    destination: str = "Los Angeles",
-    departure_date: str = "July 15",
+
+async def get_flight_results(page: Page) -> Dict[str, Any]:
+    """ Retrieves flight results from the page.
+    Args:
+        page (Page): The Playwright page instance.
+    Returns:
+        Dict[str, Any]: A dictionary containing flight results.
+    """
+    await wait_for_element_to_appear(page, "button[aria-label='Search']", timeout_ms=15000)
+    await page.locator("button[aria-label='Search']").click()
+    await page.wait_for_timeout(5000)  # Wait for results to load
+    await page.screenshot(path="flight_results.png")
+
+       
+async def main(
+    origin: str,
+    destination: str,
+    departure_date: str,
     return_date: Optional[str] = None,
+    flight_type: str = "Round trip",
+    flight_class: str = "Economy",
     adults: int = 1,
     children: int = 0,
     infants_on_lap: int = 0,
@@ -189,14 +213,46 @@ async def get_flight_cards(
     BASE_URL = "https://www.google.com/travel/flights"
     playwright, browser, page = await fetch_page(BASE_URL)
     print("✅ Page loaded successfully.")
-    await select_flight_type(page, "Round trip")
-    await select_flight_class(page, flight_class)
-    await fill_origin(page, origin)
-    await fill_destination(page, destination)
-    await set_dates(page, departure_date,return_date="July 20", flight_type="Round trip")
-    # await set_number_of_passengers(page, adults=1)
-    await browser.close()
-    await playwright.stop()
+    try:
+        if flight_type == "One way":
+            await select_flight_type(page, flight_type)
+        elif flight_type == "Round trip":
+            print("✅ Flight type is Round trip, no selection needed.")
+
+        if adults > 1 or children > 0 or infants_on_lap > 0 or infants_in_seat > 0:
+            await set_number_of_passengers(page, adults, children, infants_on_lap, infants_in_seat)
+        else:
+            print("✅ No additional passengers to set.")
+
+        if flight_class != "Economy":
+            await select_flight_class(page, flight_class)
+        else:
+            print("✅ Flight class is Economy, no selection needed.")
+
+        await fill_origin(page, origin)
+        await fill_destination(page, destination)
+        if flight_type == "Round trip":
+            assert return_date is not None, "🚨 Return date is required for round trip flights."
+        await set_dates(page, departure_date, flight_type, return_date)
+        await get_flight_results(page)
+        print("✅ Flight search completed successfully.")
+    except Exception as e:
+        print(f"❌ Error during flight search: {e}")
+    finally:
+        await browser.close()
+        await playwright.stop()
+
 
 if __name__ == "__main__":
-    asyncio.run(get_flight_cards())
+    asyncio.run(main(
+        origin="New York",
+        destination="Los Angeles",
+        departure_date="July 15",
+        # return_date="July 22",
+        flight_type="One way",
+        flight_class="Economy",
+        adults=1,
+        children=0,
+        infants_on_lap=0,
+        infants_in_seat=0
+    ))
