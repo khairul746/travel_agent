@@ -33,8 +33,7 @@ async def wait_for_element_to_appear(
 # --- Core Playwright Setup ---
 async def fetch_page(url: str) -> Tuple[async_playwright, Browser, Page]:
     """
-    Launches Playwright browser, navigates to the page,
-    handles modal popups, and loads additional flight results if available.
+    Launches Playwright browser and navigates to the page.
 
     Args:
         url (str): URL of the page to fetch.
@@ -44,12 +43,12 @@ async def fetch_page(url: str) -> Tuple[async_playwright, Browser, Page]:
     """
 
     p = await async_playwright().start()
-    browser = await p.chromium.launch(headless=True, slow_mo=50)  # Set headless to False for debugging
+    browser = await p.chromium.launch(headless=False, slow_mo=50)  # Set headless to False for debugging
     page = await browser.new_page()
-    headers = {
-        "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Edg/138.0.0.0"
-    }
-    await page.set_extra_http_headers(headers)
+    # headers = {
+    #     "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Edg/138.0.0.0"
+    # }
+    # await page.set_extra_http_headers(headers)
     await page.goto(url)
 
     return p, browser, page
@@ -63,13 +62,18 @@ async def select_flight_type(page: Page, flight_type: str = "Round trip"):
         flight_type (str): Type of flight to select ("One way", "Round trip").
     """
     try:
+        # Click the dropdown trigger for flight type
         await wait_for_element_to_appear(page, "div.VfPpkd-aPP78e", timeout_ms=10000)
         await page.locator("div.VfPpkd-aPP78e").first.click()
+
+        # Wait for the options to appear and select the desired flight type
         await wait_for_element_to_appear(page, "li[role='option']", timeout_ms=10000)
         await page.locator(f"li[role='option']:has-text('{flight_type}')").first.click()
+        
         print(f"✅ Flight type {flight_type} selected successfully.")
     except Exception as e:
         print(f"❌ Error selecting flight type: {e}")
+        raise
 
 
 async def select_flight_class(page: Page, flight_class: str = "Economy"):
@@ -79,13 +83,20 @@ async def select_flight_class(page: Page, flight_class: str = "Economy"):
         flight_class (str): Class of flight to select ("Economy", "Premium economy", "Business", "First").
     """
     try:
+        # Click the dropdown trigger for flight class (assuming it's the second one)
+        # It's highly recommended to use a more specific selector if possible,
+        # e.g., using aria-label or a parent container.
         await wait_for_element_to_appear(page, "div.VfPpkd-aPP78e", timeout_ms=10000)
         await page.locator("div.VfPpkd-aPP78e").nth(1).click()
+
+        # Wait for the options to appear and select the desired flight class
         await wait_for_element_to_appear(page, "li[role='option']", timeout_ms=10000)
         await page.locator(f"li[role='option']:has-text('{flight_class}')").first.click()
+        
         print(f"✅ Flight class {flight_class} selected successfully.")
     except Exception as e:
         print(f"❌ Error selecting flight class: {e}")
+        raise
 
 
 async def fill_origin(page: Page, origin: str):
@@ -95,15 +106,21 @@ async def fill_origin(page: Page, origin: str):
         origin (str): The origin to fill in the input field.
     """
     try:
-        await wait_for_element_to_appear(page, "input[aria-label='Where from?']", timeout_ms=10000)
-        origin_input_locator = page.locator("input[aria-label='Where from?']")
+        origin_input_selector = "input[aria-label='Where from?']"
+        await wait_for_element_to_appear(page, origin_input_selector, timeout_ms=10000)
+        
+        origin_input_locator = page.locator(origin_input_selector)
         await origin_input_locator.fill(origin)
+        
+        # Wait for the suggestion to appear and click it.
         await wait_for_element_to_appear(page, "li[role='option']:has-text('origin')", timeout_ms=5000)
         origin_option = page.locator(f"li[role='option']:has-text('{origin}')").first
         await origin_option.click()
-        print("✅ Origin filled successfully.")
+
+        print(f"✅ Origin {origin} filled successfully.")
     except Exception as e:
         print(f"❌ Error filling origin: {e}")
+        raise
 
 
 async def fill_destination(page: Page, destination: str):
@@ -113,19 +130,26 @@ async def fill_destination(page: Page, destination: str):
         destination (str): The destination to fill in the input field.
     """
     try:
-        await wait_for_element_to_appear(page, "input[aria-label='Where to? ']", timeout_ms=15000)
-        destination_input_locator = page.locator("input[aria-label='Where to? ']")
+        # Crucial: The space after 'Where to?' is important for the selector.
+        destination_input_selector = "input[aria-label='Where to? ']"
+        await wait_for_element_to_appear(page, destination_input_selector, timeout_ms=15000)
+        
+        destination_input_locator = page.locator(destination_input_selector)
         await destination_input_locator.fill(destination)
+
+        # Wait for the suggestion to appear and click it.
         await wait_for_element_to_appear(page, "li[role='option']:has-text('destination')", timeout_ms=5000)
         destination_option = page.locator(f"li[role='option']:has-text('{destination}')").first
         await destination_option.click()
-        print("✅ Destination filled successfully.")
+
+        print(f"✅ Destination {destination} filled successfully.")
     except Exception as e:
         print(f"❌ Error filling destination: {e}")
+        raise
 
 
 async def set_dates(page: Page, departure_date: str, flight_type: str, return_date: Optional[str] = None):
-    """ Sets the departure date in the date picker.
+    """ Sets the departure and optional return dates in the date picker.
     Args:
         page (Page): The Playwright page instance.
         departure_date (str): The departure date. (e.g., July 15)
@@ -134,9 +158,14 @@ async def set_dates(page: Page, departure_date: str, flight_type: str, return_da
     """
     try:
         departure_selector = "input[aria-label='Departure']"
+        # Ensure the initial departure input field is ready
         await wait_for_element_to_appear(page, departure_selector, timeout_ms=10000)
         if flight_type == "One way":
+            # Click the departure input to open the date picker
+            # Note: .nth(0) usually targets the visible input field to open the calendar.
             await page.locator(departure_selector).nth(0).click()
+            
+            # Assuming .nth(1) is the actual text input field within the date picker for departure
             await page.locator(departure_selector).nth(1).fill(departure_date)
             await page.keyboard.press("Enter")
             await page.keyboard.press("Enter")
@@ -153,11 +182,14 @@ async def set_dates(page: Page, departure_date: str, flight_type: str, return_da
             await page.keyboard.press("Enter")
     except Exception as e:
         print(f"❌ Error setting departure or return date: {e}")
+        raise
 
 
 async def set_number_of_passengers(
-        page: Page, adults: int = 1, 
-        children: int = 0, infants_on_lap: int = 0, 
+        page: Page, 
+        adults: int = 1, 
+        children: int = 0, 
+        infants_on_lap: int = 0, 
         infants_in_seat: int = 0
     ):
     """ Sets the number of passengers in the flight search.
@@ -180,14 +212,21 @@ async def set_number_of_passengers(
         await page.get_by_role("button", name="1 passenger, change number of").click()
         for passenger_type, count in passengers.items():
             if count > 0:
-                num = 1 if passenger_type == "adult" else 0
-                while num < count:
-                    await page.locator(f"button[aria-label='Add {passenger_type}']").click()
-                    num += 1
+                # Initialize current_count based on default UI state
+                current_count = 1 if passenger_type == "adult" else 0
+
+                # Click 'Add' button until target count is reached
+                while current_count < count:
+                    add_button_selector = f"button[aria-label='Add {passenger_type}']"
+                    await page.locator(add_button_selector).click()
+                    current_count += 1
+        
+        # Close the passenger menu by clicking the "Done" button
         await page.get_by_role("button", name="Done").click() # close the passenger menu
         print("✅ Number of passengers set successfully. ")
     except Exception as e:
         print(f"❌ Error setting number of passengers: {e}")
+        raise
     
 
 async def get_departing_flights(page: Page) -> Dict[str, Any]:
@@ -198,18 +237,21 @@ async def get_departing_flights(page: Page) -> Dict[str, Any]:
         Dict[str, Any]: A dictionary containing flight results.
     """
     departing_flight_results = {}
-    
-    search_results_selector = "button[aria-label='Search']"
-    await wait_for_element_to_appear(page, search_results_selector, timeout_ms=15000)
-    await page.locator(search_results_selector).click()
-    await page.wait_for_timeout(5000)
 
     try:
-        top_flights_selector = await page.locator("li.pIav2d").all()
-        print(f"✅ Found {len(top_flights_selector)} departing flight.")
+        # Click the search button to initiate the flight search
+        search_results_selector = "button[aria-label='Search']"
+        await wait_for_element_to_appear(page, search_results_selector, timeout_ms=15000)
+        await page.locator(search_results_selector).click()
+        await page.wait_for_timeout(5000)  # Wait for the search results to load
+
+        # Wait for the flight results to appear
+        top_flights_locator = await page.locator("li.pIav2d").all()
+        print(f"✅ Found {len(top_flights_locator)} departing flight.")
+        
         limiter = 9  # Limit to the first 10 results for performance
         seen_details = set()
-        for i, flight in enumerate(top_flights_selector):
+        for i, flight in enumerate(top_flights_locator):
             travel_detail = await flight.locator("div.JMc5Xc").first.get_attribute("aria-label")
             print(f"✈️ Flight {i+1}: {travel_detail}", end="\n\n")
             if travel_detail not in seen_details:
@@ -220,7 +262,7 @@ async def get_departing_flights(page: Page) -> Dict[str, Any]:
         return departing_flight_results
     except Exception as e:
         print(f"❌ Error retrieving departing flight: {e}")
-        raise e
+        raise
     
 
 async def get_returning_flights(page: Page, departing_detail: str) -> Dict[str, Any]:
@@ -252,7 +294,7 @@ async def get_returning_flights(page: Page, departing_detail: str) -> Dict[str, 
                         seen_details.add(travel_detail)
                         if i > limiter:
                             break
-                break
+                
         return returning_flight_results
     except Exception as e:
         print(f"❌ Error retrieving returning flight: {e}")
@@ -277,7 +319,7 @@ def parse_flight_results(flight_results: Dict[str, Any]) -> Dict[str, Any]:
 
             flight_pattern = re.compile(
                 r"Leaves (.*?) at ([\d:]{1,2}:\d{2}\s*[AP]M) on (.+?) "
-                r"and arrives at (.*?) at ([\d:]{1,2}:\d{2}\s*[AP]M) on (.+)"
+                r"and arrives at (.*?) at ([\d:]{1,2}:\d{2}\s*[AP]M) on (.+)."
             )
             match = flight_pattern.search(segments[2])
             if match:
@@ -288,14 +330,14 @@ def parse_flight_results(flight_results: Dict[str, Any]) -> Dict[str, Any]:
                 arrival_time = match.group(5).strip()
                 arrival_date = match.group(6).strip()
             else:
-                raise ValueError("Flight details format is incorrect.")
+                raise ValueError("🚨 Flight details format is incorrect.")
             
             flight_duration_pattern  = re.compile(r"Total duration ([\d\s\w]+)") 
             duration_match = flight_duration_pattern.search(segments[3])
             if duration_match:
                 flight_duration = duration_match.group(1).strip()
             else:
-                raise ValueError("Flight duration format is incorrect.")
+                raise ValueError("🚨 Flight duration format is incorrect.")
             
             parsed_results[flight] = {
                 "Price": price,
@@ -378,7 +420,7 @@ if __name__ == "__main__":
         departure_date="July 19",
         return_date="July 27",
         flight_type="Round trip", # "One way" or "Round trip"
-        flight_class="First", # [Optional] "Economy", "Premium economy", "Business", "First"
+        flight_class="Premium economy", # [Optional] "Economy", "Premium economy", "Business", "First"
         adults=2,
         children=1,
         infants_on_lap=1,
