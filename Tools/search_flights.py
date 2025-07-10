@@ -43,12 +43,12 @@ async def fetch_page(url: str) -> Tuple[async_playwright, Browser, Page]:
     """
 
     p = await async_playwright().start()
-    browser = await p.chromium.launch(headless=False, slow_mo=50)  # Set headless to False for debugging
+    browser = await p.chromium.launch(headless=True)  # Set headless to False for debugging
     page = await browser.new_page()
-    # headers = {
-    #     "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Edg/138.0.0.0"
-    # }
-    # await page.set_extra_http_headers(headers)
+    headers = {
+        "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Edg/138.0.0.0"
+    }
+    await page.set_extra_http_headers(headers)
     await page.goto(url)
 
     return p, browser, page
@@ -68,6 +68,7 @@ async def select_flight_type(page: Page, flight_type: str = "Round trip"):
 
         # Wait for the options to appear and select the desired flight type
         await wait_for_element_to_appear(page, "li[role='option']", timeout_ms=10000)
+        await page.wait_for_timeout(500)  # Ensure the options are fully loaded
         await page.locator(f"li[role='option']:has-text('{flight_type}')").first.click()
         
         print(f"✅ Flight type {flight_type} selected successfully.")
@@ -90,7 +91,7 @@ async def select_flight_class(page: Page, flight_class: str = "Economy"):
         await page.locator("div.VfPpkd-aPP78e").nth(1).click()
 
         # Wait for the options to appear and select the desired flight class
-        await wait_for_element_to_appear(page, "li[role='option']", timeout_ms=10000)
+        await wait_for_element_to_appear(page, "li[role='option']", timeout_ms=5000)
         await page.locator(f"li[role='option']:has-text('{flight_class}')").first.click()
         
         print(f"✅ Flight class {flight_class} selected successfully.")
@@ -113,7 +114,7 @@ async def fill_origin(page: Page, origin: str):
         await origin_input_locator.fill(origin)
         
         # Wait for the suggestion to appear and click it.
-        await wait_for_element_to_appear(page, "li[role='option']:has-text('origin')", timeout_ms=5000)
+        # await wait_for_element_to_appear(page, "li[role='option']:has-text('origin')", timeout_ms=5000)
         origin_option = page.locator(f"li[role='option']:has-text('{origin}')").first
         await origin_option.click()
 
@@ -138,7 +139,7 @@ async def fill_destination(page: Page, destination: str):
         await destination_input_locator.fill(destination)
 
         # Wait for the suggestion to appear and click it.
-        await wait_for_element_to_appear(page, "li[role='option']:has-text('destination')", timeout_ms=5000)
+        # await wait_for_element_to_appear(page, "li[role='option']:has-text('destination')", timeout_ms=5000)
         destination_option = page.locator(f"li[role='option']:has-text('{destination}')").first
         await destination_option.click()
 
@@ -247,7 +248,6 @@ async def get_departing_flights(page: Page) -> Dict[str, Any]:
 
         # Wait for the flight results to appear
         top_flights_locator = await page.locator("li.pIav2d").all()
-        print(f"✅ Found {len(top_flights_locator)} departing flight.")
         
         limiter = 9  # Limit to the first 10 results for performance
         seen_details = set()
@@ -259,6 +259,7 @@ async def get_departing_flights(page: Page) -> Dict[str, Any]:
                 seen_details.add(travel_detail)
             if i > limiter:
                 break
+        print(f"✅ Found {len(departing_flight_results)} departing flight.")
         return departing_flight_results
     except Exception as e:
         print(f"❌ Error retrieving departing flight: {e}")
@@ -276,14 +277,15 @@ async def get_returning_flights(page: Page, departing_detail: str) -> Dict[str, 
     try:
         top_flights_selector = await page.locator("li.pIav2d").all()
         for i, flight in enumerate(top_flights_selector):
+            # Select the departing flight based on the provided detail
             selected_departing_flight = flight.locator(f"div.JMc5Xc[aria-label='{departing_detail}']").first
 
+            # Scrape the returning flight based on the selected departing flight
             if await selected_departing_flight.is_visible():
                 print(f"🔍 Processing returning flight {i+1}: {departing_detail}")
                 await flight.locator("div.yR1fYc").first.click()
                 await wait_for_element_to_appear(page, "li.pIav2d", timeout_ms=10000)
                 top_flights_selector = await page.locator("li.pIav2d").all()
-                print(f"✅ Found {len(top_flights_selector)} returning flight.")
                 limiter = 9  # Limit to the first 10 results for performance
                 seen_details = set()
                 for i, flight in enumerate(top_flights_selector):
@@ -294,8 +296,10 @@ async def get_returning_flights(page: Page, departing_detail: str) -> Dict[str, 
                         seen_details.add(travel_detail)
                         if i > limiter:
                             break
-                
+
+        print(f"✅ Found {len(returning_flight_results)} returning flight.") if len(returning_flight_results) > 0 else print("❌ No returning flights found.")   
         return returning_flight_results
+    
     except Exception as e:
         print(f"❌ Error retrieving returning flight: {e}")
         raise e
@@ -312,52 +316,84 @@ def parse_flight_results(flight_results: Dict[str, Any]) -> Dict[str, Any]:
     parsed_results = {}
     for flight, details in flight_results.items():
         try:
-            details = details.replace('\u202f', ' ')
-            segments = details.split(". ")
-            price = segments[0].split(" ")[1]
-            num_stops = segments[1].split(" ")[0]
+            text = details.replace('\u202f', ' ')
+            result = {}
 
-            flight_pattern = re.compile(
-                r"Leaves (.*?) at ([\d:]{1,2}:\d{2}\s*[AP]M) on (.+?) "
-                r"and arrives at (.*?) at ([\d:]{1,2}:\d{2}\s*[AP]M) on (.+)."
+            # price extraction
+            price_m = re.search(r"From (\d+)", text)
+            price = f"Rp{int(price_m.group(1)):,}"
+            result["price"] = price
+
+            # number of stops extraction and airline extraction
+            stops = None
+            airlines = None
+            stops_m = re.search(r"(Nonstop|\d+ stops?|1 stop) flight with ([\w\s,&]+?)\.", text)
+            if stops_m:
+                stops_str = stops_m.group(1)
+                if stops_str == "Nonstop":
+                    stops = 0
+                elif stops_str == "1 stop":
+                    stops = 1
+                else:
+                    stops = int(re.search(r"\d+", stops_str).group())
+                airlines = [a.strip() for a in re.split(r' and |, ', stops_m.group(2))]
+            result["stops"] = stops
+            result["airlines"] = airlines
+
+            # departure and arrival details extraction
+            m = re.search(
+                r"Leaves\s+(.*?)\s+at\s+([\d:]{1,2}:\d{2}\s*[AP]M)\s+on\s+(.+?)\s+and arrives at\s+(.*?)\s+at\s+([\d:]{1,2}:\d{2}\s*[AP]M)\s+on\s+(.+?)(?:\.| Total duration| Layover|$)",
+                text.replace('\u202f', ' ')
             )
-            match = flight_pattern.search(segments[2])
-            if match:
-                departure_airport = match.group(1).strip()
-                departure_time = match.group(2).strip()
-                departure_date = match.group(3).strip()
-                arrival_airport = match.group(4).strip()
-                arrival_time = match.group(5).strip()
-                arrival_date = match.group(6).strip()
+            if m:
+                result['departure_airport'] = m.group(1)
+                result['departure_time'] = m.group(2)
+                result['departure_date'] = m.group(3)
+                result['arrival_airport'] = m.group(4)
+                result['arrival_time'] = m.group(5)
+                result['arrival_date'] = m.group(6)
             else:
-                raise ValueError("🚨 Flight details format is incorrect.")
+                result['departure_airport'] = result['departure_time'] = result['departure_date'] = None
+                result['arrival_airport'] = result['arrival_time'] = result['arrival_date'] = None
             
-            flight_duration_pattern  = re.compile(r"Total duration ([\d\s\w]+)") 
-            duration_match = flight_duration_pattern.search(segments[3])
-            if duration_match:
-                flight_duration = duration_match.group(1).strip()
-            else:
-                raise ValueError("🚨 Flight duration format is incorrect.")
+            # total duration extraction
+            duration_m = re.search(r"Total duration\s+([\d\s+hr\s+\d\s+min]+)\.", text)
+            result['flight_duration'] = duration_m.group(1) if duration_m else None
+
+            # layover extraction
+            layover_pattern = re.compile(r"Layover \((\d+) of \d+\) is a ([\d\s+hrmin]+)(\s+overnight)? layover at (.*?)(?:\.|$)")
+            layovers = []
+            for lay in layover_pattern.finditer(text):
+                layovers.append({
+                    'layover_number': int(lay.group(1)),
+                    'layover_duration': lay.group(2),
+                    'overnight': bool(lay.group(3)),
+                    'layover_airport': lay.group(4)
+                })
+            result['layovers'] = layovers if layovers else None
+            result['layovers_total'] = len(layovers) if layovers else 0
             
-            parsed_results[flight] = {
-                "Price": price,
-                "Number of Stops": num_stops,
-                "Departure Airport": departure_airport,
-                "Departure Time": departure_time,
-                "Departure Date": departure_date,
-                "Arrival Airport": arrival_airport,
-                "Arrival Time": arrival_time,
-                "Arrival Date": arrival_date,
-                "Flight Duration": flight_duration,
-            }
-            print(f"✅ Successfully parsed flight {flight}.")
-            print(f"Details: {parsed_results[flight]}", end="\n\n")
-        
+            print(f"✅ Parsed flight {flight} successfully.")
+            for k, v in result.items():
+                print(f"{k}: {v}", end="\n")
+            print()
+            
+            # Add the parsed result to the dictionary
+            parsed_results[flight] = result
+
         except Exception as e:
             print(f"❌ Error parsing flight {flight}: {e}")
             print(f"Raw details: {details}", end="\n\n")
             parsed_results[flight] = {"Error": str(e)}
-    print("✅ All flight results has been parsed.")
+
+    # Check if parsed_results is empty
+    if not parsed_results:
+        print("❌ No flight results to parse.")
+    elif len(parsed_results) == len(flight_results):
+        print("✅ All flight results has been parsed.")
+    else:
+        print("⚠️ Some flight results could not be parsed.")
+
     return parsed_results
 
 
@@ -396,9 +432,9 @@ async def main(
             assert return_date is not None, "🚨 Return date is required for round trip flights."
             await set_dates(page, departure_date, flight_type, return_date)
             departing_res = await get_departing_flights(page)
+            parse_flight_results(departing_res)
             select_departing_flight = input("Select departing flight (e.g., Flight 1): ")
             returning_res = await get_returning_flights(page, departing_res[select_departing_flight])
-            parse_flight_results(departing_res)
             parse_flight_results(returning_res)
         else:
             await select_flight_type(page, flight_type)
@@ -415,12 +451,12 @@ async def main(
 
 if __name__ == "__main__":
     asyncio.run(main(
-        origin="New York",
-        destination="Los Angeles",
-        departure_date="July 19",
-        return_date="July 27",
+        origin="Surabaya",
+        destination="Tokyo",
+        departure_date="July 12",
+        return_date="July 19",
         flight_type="Round trip", # "One way" or "Round trip"
-        flight_class="Premium economy", # [Optional] "Economy", "Premium economy", "Business", "First"
+        flight_class="Business", # [Optional] "Economy", "Premium economy", "Business", "First"
         adults=2,
         children=1,
         infants_on_lap=1,
