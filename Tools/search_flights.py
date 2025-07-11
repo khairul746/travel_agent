@@ -30,6 +30,41 @@ async def wait_for_element_to_appear(
     return False
 
 
+def clean_price_string(price_str: str) -> int:
+    """
+    Cleans a price string (e.g., 'Rp41,724,888') and converts it to an integer.
+    Removes 'Rp' prefix and commas.
+    """
+    # Remove 'Rp' and all commas
+    cleaned_price = re.sub(r'[Rp,]', '', price_str)
+    try:
+        return int(cleaned_price)
+    except ValueError:
+        print(f"Warning: Could not convert price '{price_str}' to integer.")
+        return float('inf') # Return infinity for prices that cannot be parsed
+
+
+def convert_duration_to_minutes(duration_str: str) -> int:
+    """
+    Converts a flight duration string (e.g., '18 hr 5 min') to total minutes.
+    """
+    hours = 0
+    minutes = 0
+
+    # Match hours (e.g., "18 hr" or "1 hr")
+    hour_match = re.search(r'(\d+)\s*hr', duration_str)
+    if hour_match:
+        hours = int(hour_match.group(1))
+
+    # Match minutes (e.g., "5 min" or "55 min")
+    min_match = re.search(r'(\d+)\s*min', duration_str)
+    if min_match:
+        minutes = int(min_match.group(1))
+    
+    total_minutes = (hours * 60) + minutes
+    return total_minutes
+
+
 # --- Core Playwright Setup ---
 async def fetch_page(url: str) -> Tuple[async_playwright, Browser, Page]:
     """
@@ -43,7 +78,7 @@ async def fetch_page(url: str) -> Tuple[async_playwright, Browser, Page]:
     """
 
     p = await async_playwright().start()
-    browser = await p.chromium.launch(headless=True)  # Set headless to False for debugging
+    browser = await p.chromium.launch(headless=True, slow_mo=200)  # Set headless to False for debugging
     page = await browser.new_page()
     headers = {
         "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Edg/138.0.0.0"
@@ -230,7 +265,7 @@ async def set_number_of_passengers(
         raise
     
 
-async def get_departing_flights(page: Page) -> Dict[str, Any]:
+async def get_departing_flights(page: Page, flight_class: str = "Economy") -> Tuple[Dict[str, Any], str]:
     """ Retrieves departing flight results from the page.
     Args:
         page (Page): The Playwright page instance.
@@ -246,6 +281,14 @@ async def get_departing_flights(page: Page) -> Dict[str, Any]:
         await page.locator(search_results_selector).click()
         await page.wait_for_timeout(5000)  # Wait for the search results to load
 
+        # Handle searching progress if there are no result
+        flight_class_used = flight_class
+        if await page.locator("div[role='alert']:has-text('No results returned.')").is_visible():
+            print(f"😢 There are no flights for this class. Changing flight class to Economy...")
+            await select_flight_class(page, flight_class="Economy")
+            await page.wait_for_load_state("networkidle", timeout=30000)
+            flight_class_used = "Economy"
+
         # Wait for the flight results to appear
         top_flights_locator = await page.locator("li.pIav2d").all()
         
@@ -253,14 +296,15 @@ async def get_departing_flights(page: Page) -> Dict[str, Any]:
         seen_details = set()
         for i, flight in enumerate(top_flights_locator):
             travel_detail = await flight.locator("div.JMc5Xc").first.get_attribute("aria-label")
-            print(f"✈️ Flight {i+1}: {travel_detail}", end="\n\n")
+            # print(f"✈️ Flight {i+1}: {travel_detail}", end="\n\n")
             if travel_detail not in seen_details:
                 departing_flight_results[f"Flight {i+1}"] = travel_detail
                 seen_details.add(travel_detail)
             if i > limiter:
                 break
-        print(f"✅ Found {len(departing_flight_results)} departing flight.")
-        return departing_flight_results
+            
+        print(f"✅ Found {len(departing_flight_results)} departing flight.") if len(departing_flight_results) > 0 else print("❌ No departing flight found")
+        return departing_flight_results, flight_class_used
     except Exception as e:
         print(f"❌ Error retrieving departing flight: {e}")
         raise
@@ -282,7 +326,7 @@ async def get_returning_flights(page: Page, departing_detail: str) -> Dict[str, 
 
             # Scrape the returning flight based on the selected departing flight
             if await selected_departing_flight.is_visible():
-                print(f"🔍 Processing returning flight {i+1}: {departing_detail}")
+                # print(f"🔍 Processing returning flight {i+1}: {departing_detail}")
                 await flight.locator("div.yR1fYc").first.click()
                 await wait_for_element_to_appear(page, "li.pIav2d", timeout_ms=10000)
                 top_flights_selector = await page.locator("li.pIav2d").all()
@@ -292,7 +336,7 @@ async def get_returning_flights(page: Page, departing_detail: str) -> Dict[str, 
                     travel_detail = await flight.locator("div.JMc5Xc").first.get_attribute("aria-label")
                     if travel_detail not in seen_details:
                         returning_flight_results[f"Flight {i+1}"] = travel_detail
-                        print(f"✈️ Returning flight {i+1} added: {travel_detail}", end="\n\n")
+                        # print(f"✈️ Returning flight {i+1} added: {travel_detail}", end="\n\n")
                         seen_details.add(travel_detail)
                         if i > limiter:
                             break
@@ -314,6 +358,10 @@ def parse_flight_results(flight_results: Dict[str, Any]) -> Dict[str, Any]:
         Dict[str, Any]: Parsed flight results dictionary.
     """
     parsed_results = {}
+    if flight_results is None:
+        print("❌ There is no flight to parse")
+        return parsed_results
+    
     for flight, details in flight_results.items():
         try:
             text = details.replace('\u202f', ' ')
@@ -371,28 +419,13 @@ def parse_flight_results(flight_results: Dict[str, Any]) -> Dict[str, Any]:
                     'layover_airport': lay.group(4)
                 })
             result['layovers'] = layovers if layovers else None
-            result['layovers_total'] = len(layovers) if layovers else 0
-            
-            print(f"✅ Parsed flight {flight} successfully.")
-            for k, v in result.items():
-                print(f"{k}: {v}", end="\n")
-            print()
-            
-            # Add the parsed result to the dictionary
+            print(f"✈️ {flight} has been parsed successfully")
             parsed_results[flight] = result
 
         except Exception as e:
             print(f"❌ Error parsing flight {flight}: {e}")
             print(f"Raw details: {details}", end="\n\n")
             parsed_results[flight] = {"Error": str(e)}
-
-    # Check if parsed_results is empty
-    if not parsed_results:
-        print("❌ No flight results to parse.")
-    elif len(parsed_results) == len(flight_results):
-        print("✅ All flight results has been parsed.")
-    else:
-        print("⚠️ Some flight results could not be parsed.")
 
     return parsed_results
 
@@ -408,45 +441,140 @@ async def main(
     adults: int = 1,
     children: int = 0,
     infants_on_lap: int = 0,
-    infants_in_seat: int = 0
-):
+    infants_in_seat: int = 0,
+    search_type: str = "Top flight" # categorize search to : ("Top flight", "Lowest price", "Shortest duration")
+) -> Dict[str, Any] | None:
+    """
+    Orchestrates the flight search process on Google Flights and returns the parsed results.
+
+    Args:
+        origin (str): The departure city/airport.
+        destination (str): The arrival city/airport.
+        departure_date (str): The desired departure date (e.g., "July 15").
+        return_date (Optional[str]): The desired return date (e.g., "July 22"). Required for "Round trip".
+        flight_type (str): Type of flight ("One way" or "Round trip"). Defaults to "Round trip".
+        flight_class (str): Class of flight ("Economy", "Premium economy", etc.). Defaults to "Economy".
+        adults (int): Number of adult passengers. Defaults to 1.
+        children (int): Number of children passengers. Defaults to 0.
+        infants_on_lap (int): Number of infants on lap. Defaults to 0.
+        infants_in_seat (int): Number of infants in seat. Defaults to 0.
+
+    Returns:
+        Dict[str, Any] | None: A dictionary containing parsed flight results (departing and returning if applicable),
+                                or None if an error occurs. The structure will be:
+                                {
+                                    "departing_flights": List[Dict],
+                                    "returning_flights": List[Dict] | None
+                                }
+    """
     BASE_URL = "https://www.google.com/travel/flights"
-    playwright, browser, page = await fetch_page(BASE_URL)
-    print("✅ Page loaded successfully.")
+    playwright_instance: async_playwright | None = None
+    browser: Browser | None = None
+    page: Page | None = None
+    
     try:
+        playwright_instance, browser, page = await fetch_page(BASE_URL)
+        print("✅ Page loaded successfully.")
+
+        # Set number of passengers (only if different from default)
         if adults > 1 or children > 0 or infants_on_lap > 0 or infants_in_seat > 0:
             await set_number_of_passengers(page, adults, children, infants_on_lap, infants_in_seat)
         else:
             print("✅ No additional passengers to set.")
 
+        # Select flight class (only if different from default)
         if flight_class != "Economy":
             await select_flight_class(page, flight_class)
         else:
             print("✅ Flight class is Economy, no selection needed.")
         
+        # Fill flight origin and destination
         await fill_origin(page, origin)
         await fill_destination(page, destination)
         
+        # Select flight type and set dates (default flight type: "Round trip")
         if flight_type == "Round trip":
             print("✅ Flight type is Round trip, no selection needed.")
             assert return_date is not None, "🚨 Return date is required for round trip flights."
             await set_dates(page, departure_date, flight_type, return_date)
-            departing_res = await get_departing_flights(page)
-            parse_flight_results(departing_res)
-            select_departing_flight = input("Select departing flight (e.g., Flight 1): ")
-            returning_res = await get_returning_flights(page, departing_res[select_departing_flight])
-            parse_flight_results(returning_res)
+            
+            # Get departing flights
+            departing_res, flight_class_used = await get_departing_flights(page)
+            print("🔃 Parsing departing flights")
+            parsed_departing = parse_flight_results(departing_res)
+            parsed_returning = None
+
+            # Get returning flights based on top flight
+            if parsed_departing and search_type == "Top flight":
+                print(f"🔝 Get returning flights based on top flight")
+                selected_departing_flight = "Flight 1"
+                returning_res = await get_returning_flights(page, departing_res[selected_departing_flight])
+                print("🔃 Parsing returning flights")
+                parsed_returning = parse_flight_results(returning_res)
+                print("✅ Flight search completed successfully.")
+
+            # Get returning flights based on lowest price
+            elif parsed_departing and search_type == "Lowest price":
+                print(f"💸 Get returning flight based on lowest price flight.")
+                
+                selected_departing_flight_details = min(
+                    parsed_departing,
+                    key=lambda flight_key: clean_price_string(parsed_departing[flight_key]['price'])
+                )
+                print(f"Lowest price flight : {selected_departing_flight_details}")
+                selected_departing_flight_aria_label = departing_res.get(selected_departing_flight_details)
+                
+                if selected_departing_flight_aria_label:
+                    returning_raw_results = await get_returning_flights(page, selected_departing_flight_aria_label)
+                    print("🔃 Parsing returning flights")
+                    parsed_returning = parse_flight_results(returning_raw_results)
+                    print("✅ Flight search completed successfully.")
+                else:
+                    print("❌ Failed to find aria-label for the automatically selected departure flight.")
+
+            # Get returning flights based on shortest flight duration
+            elif parsed_departing and search_type == "Shortest duration":
+                print(f"⚡ Get returning flight based on shortest flight duration.")
+
+                selected_departing_flight_details = min(
+                    parsed_departing,
+                    key=lambda flight_key: convert_duration_to_minutes(parsed_departing[flight_key]['flight_duration'])
+                )
+                print(f"Shortest duration flight : {selected_departing_flight_details}")
+                selected_departing_flight_aria_label = departing_res.get(selected_departing_flight_details)
+                
+                if selected_departing_flight_aria_label:
+                    returning_raw_results = await get_returning_flights(page, selected_departing_flight_aria_label)
+                    print("🔃 Parsing returning flights")
+                    parsed_returning = parse_flight_results(returning_raw_results)
+                    print("✅ Flight search completed successfully.")
+                else:
+                    print("❌ Failed to find aria-label for the automatically selected departure flight.")
+
+            return {
+                "departing_flights" : parsed_departing, 
+                "returning_flights" : parsed_returning
+            }
+        
+        # Set dates for one way flight
         else:
             await select_flight_type(page, flight_type)
             await set_dates(page, departure_date, flight_type)
-            departing_res = await get_departing_flights(page)
-            parse_flight_results(departing_res)
-        print("✅ Flight search completed successfully.")
+            
+            # Get departing flights
+            departing_res, flight_class_used = await get_departing_flights(page)
+            parsed_departing = parse_flight_results(departing_res)
+            
+            print("✅ Flight search completed successfully.")
+            return {"departing_flights" : parsed_departing}
+        
     except Exception as e:
         print(f"❌ Error during flight search: {e}")
+        raise
+
     finally:
         await browser.close()
-        await playwright.stop()
+        await playwright_instance.stop()
 
 
 if __name__ == "__main__":
@@ -455,10 +583,11 @@ if __name__ == "__main__":
         destination="Tokyo",
         departure_date="July 12",
         return_date="July 19",
-        flight_type="Round trip", # "One way" or "Round trip"
-        flight_class="Business", # [Optional] "Economy", "Premium economy", "Business", "First"
+        flight_type="One way", # "One way" or "Round trip"
+        flight_class="First", # [Optional] "Economy", "Premium economy", "Business", "First"
         adults=2,
         children=1,
         infants_on_lap=1,
-        infants_in_seat=1
+        infants_in_seat=1,
+        search_type="Lowest price" # [Optional] "Top flights", "Lowest price", "Shortest duration"
     ))
