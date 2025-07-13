@@ -2,6 +2,7 @@ import asyncio
 from playwright.async_api import async_playwright, Page, Browser  # type: ignore
 from typing import Dict, Any, Optional, Tuple
 import re
+from datetime import datetime
 
 
 # --- Helper Functions ---
@@ -65,6 +66,54 @@ def convert_duration_to_minutes(duration_str: str) -> int:
     return total_minutes
 
 
+def parse_dates(input_dates: str, default_year: int = None):
+    """
+    Accepts date input in various string formats and converts it to a datetime object.
+    If no year is specified, it uses the current year or the given default_year.
+    
+    Examples of supported formats:
+    - "2025-07-13"
+    - "13/07/2025"
+    - "July 13"
+    - "13 July"
+    - "13 Jul"
+    - "Jul 13, 2025"
+    - "13-07"
+    """
+
+    if input_dates is None:
+        raise ValueError("Date input cannot be None. Please provide a valid date string.")
+    input_dates = input_dates.strip()
+    year = default_year or datetime.now().year
+        
+    candidate_format = [
+        ("%Y-%m-%d", False),
+        ("%d/%m/%Y", False),
+        ("%B %d, %Y", False),
+        ("%d %B %Y", False),
+        ("%d %b %Y", False),
+        ("%b %d, %Y", False),
+        ("%B %d", True),
+        ("%d %B", True),
+        ("%d %b", True),
+        ("%m-%d", True),
+        ("%d/%m", True),
+    ]
+
+    for fmt, need_year in candidate_format:
+        try:
+            if need_year:
+                # Tambah tahun jika tidak ada
+                input_dates = f"{input_dates} {year}"
+                return datetime.strptime(input_dates, fmt + " %Y")
+            else:
+                return datetime.strptime(input_dates, fmt)
+        except ValueError:
+            continue
+
+    raise ValueError(f"Date format not recognized: '{input_dates}'")
+
+
 # --- Core Playwright Setup ---
 async def fetch_page(url: str) -> Tuple[async_playwright, Browser, Page]:
     """
@@ -78,12 +127,12 @@ async def fetch_page(url: str) -> Tuple[async_playwright, Browser, Page]:
     """
 
     p = await async_playwright().start()
-    browser = await p.chromium.launch(headless=False, slow_mo=200)  # Set headless to False for debugging
+    browser = await p.chromium.launch(headless=True)  # Set headless to False for debugging
     page = await browser.new_page()
-    # headers = {
-    #     "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Edg/138.0.0.0"
-    # }
-    # await page.set_extra_http_headers(headers)
+    headers = {
+        "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Edg/138.0.0.0"
+    }
+    await page.set_extra_http_headers(headers)
     await page.goto(url)
 
     return p, browser, page
@@ -192,6 +241,15 @@ async def set_dates(page: Page, departure_date: str, flight_type: str, return_da
         flight_type (str): Type of flight ("One way" or "Round trip").
         return_date (Optional[str]): The return date if flight_type is "Round trip". Defaults to None.
     """
+    # Check if the date is outdated or incorrect format
+    if return_date is not None:
+        if parse_dates(return_date) <= parse_dates(departure_date):
+            print("🚨 The return date must not precede the departure date")
+            return
+    if parse_dates(departure_date) < datetime.now():
+        print("🚨 Please set a valid departure date")
+        await page.keyboard.press("Escape")
+        return 
     try:
         departure_selector = "input[aria-label='Departure']"
         # Ensure the initial departure input field is ready
@@ -200,14 +258,20 @@ async def set_dates(page: Page, departure_date: str, flight_type: str, return_da
             # Click the departure input to open the date picker
             # Note: .nth(0) usually targets the visible input field to open the calendar.
             await page.locator(departure_selector).nth(0).click()
-            
+            await wait_for_element_to_appear(page, "div.WhDFk Io4vne")
+
             # Assuming .nth(1) is the actual text input field within the date picker for departure
             await page.locator(departure_selector).nth(1).fill(departure_date)
             await page.keyboard.press("Enter")
             await page.keyboard.press("Enter")
             print(f"✅ Departure date {departure_date} set successfully.")
         elif flight_type == "Round trip":
+            if parse_dates(departure_date) < datetime.now():
+                print("🚨 Please set a valid return date")
+                await page.keyboard.press("Escape")
+                return
             await page.locator(departure_selector).nth(0).click()
+            await wait_for_element_to_appear(page, "div.WhDFk Io4vne")
             await page.locator(departure_selector).nth(1).fill(departure_date)
             if return_date:
                 await page.keyboard.press("Tab")
@@ -278,6 +342,8 @@ async def get_departing_flights(page: Page, flight_class: str = "Economy") -> Tu
         # Click the search button to initiate the flight search
         search_results_selector = "button[aria-label='Search']"
         await wait_for_element_to_appear(page, search_results_selector, timeout_ms=15000)
+        if not await page.locator(search_results_selector).is_visible():
+            print("🚨 No available flight for this search parameter")
         await page.locator(search_results_selector).click()
         await page.wait_for_timeout(5000)  # Wait for the search results to load
 
@@ -500,10 +566,12 @@ async def main(
             
             # Get departing flights
             departing_res, flight_class_used = await get_departing_flights(page)
-            print("🔃 Parsing departing flights")
-            parsed_departing = parse_flight_results(departing_res)
+            parsed_departing = None
             parsed_returning = None
-
+            if len(departing_res) > 0:
+                print("🔃 Parsing departing flights")
+                parsed_departing = parse_flight_results(departing_res)
+                
             # Get returning flights based on top flight
             if parsed_departing and search_type == "Top flight":
                 print(f"🔝 Get returning flights based on top flight")
@@ -559,7 +627,7 @@ async def main(
         # Set dates for one way flight
         else:
             await select_flight_type(page, flight_type)
-            await set_dates(page, departure_date, flight_type)
+            await set_dates(page, departure_date, flight_type, None)
             
             # Get departing flights
             departing_res, flight_class_used = await get_departing_flights(page)
@@ -581,10 +649,10 @@ if __name__ == "__main__":
     asyncio.run(main(
         origin="Surabaya",
         destination="Tokyo",
-        departure_date="July 12",
-        return_date="July 19",
-        flight_type="One way", # "One way" or "Round trip"
-        flight_class="First", # [Optional] "Economy", "Premium economy", "Business", "First"
+        departure_date="July 16",
+        return_date="July 20",
+        flight_type="Round trip", # "One way" or "Round trip"
+        flight_class="Economy", # [Optional] "Economy", "Premium economy", "Business", "First"
         adults=2,
         children=1,
         infants_on_lap=1,
