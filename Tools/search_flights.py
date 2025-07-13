@@ -36,7 +36,7 @@ def clean_price_string(price_str: str) -> int:
     Removes 'Rp' prefix and commas.
     """
     # Remove 'Rp' and all commas
-    cleaned_price = re.sub(r'[Rp,]', '', price_str)
+    cleaned_price = re.sub(r'[Rp,.]', '', price_str)
     try:
         return int(cleaned_price)
     except ValueError:
@@ -78,12 +78,12 @@ async def fetch_page(url: str) -> Tuple[async_playwright, Browser, Page]:
     """
 
     p = await async_playwright().start()
-    browser = await p.chromium.launch(headless=True, slow_mo=200)  # Set headless to False for debugging
+    browser = await p.chromium.launch(headless=False, slow_mo=200)  # Set headless to False for debugging
     page = await browser.new_page()
-    headers = {
-        "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Edg/138.0.0.0"
-    }
-    await page.set_extra_http_headers(headers)
+    # headers = {
+    #     "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Edg/138.0.0.0"
+    # }
+    # await page.set_extra_http_headers(headers)
     await page.goto(url)
 
     return p, browser, page
