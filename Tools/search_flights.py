@@ -103,7 +103,6 @@ def parse_dates(input_dates: str, default_year: int = None):
     for fmt, need_year in candidate_format:
         try:
             if need_year:
-                # Tambah tahun jika tidak ada
                 input_dates = f"{input_dates} {year}"
                 return datetime.strptime(input_dates, fmt + " %Y")
             else:
@@ -198,11 +197,13 @@ async def fill_origin(page: Page, origin: str):
         await origin_input_locator.fill(origin)
         
         # Wait for the suggestion to appear and click it.
-        # await wait_for_element_to_appear(page, "li[role='option']:has-text('origin')", timeout_ms=5000)
-        origin_option = page.locator(f"li[role='option']:has-text('{origin}')").first
-        await origin_option.click()
-
-        print(f"✅ Origin {origin} filled successfully.")
+        origin_selector = f"//li[@role='option'][contains(., '{origin}')]"
+        if await wait_for_element_to_appear(page, origin_selector, timeout_ms=5000):
+            origin_option = page.locator(origin_selector) 
+            await origin_option.first.click()
+            print(f"✅ Origin {origin} filled successfully.")
+        else:
+            raise ValueError(f"{origin} is not exist")
     except Exception as e:
         print(f"❌ Error filling origin: {e}")
         raise
@@ -223,11 +224,13 @@ async def fill_destination(page: Page, destination: str):
         await destination_input_locator.fill(destination)
 
         # Wait for the suggestion to appear and click it.
-        # await wait_for_element_to_appear(page, "li[role='option']:has-text('destination')", timeout_ms=5000)
-        destination_option = page.locator(f"li[role='option']:has-text('{destination}')").first
-        await destination_option.click()
-
-        print(f"✅ Destination {destination} filled successfully.")
+        destination_selector = f"//li[@role='option'][contains(., '{destination}')]"
+        if await wait_for_element_to_appear(page, destination_selector, timeout_ms=5000):
+            destination_option = page.locator(destination_selector)
+            await destination_option.first.click()
+            print(f"✅ Destination {destination} filled successfully.")
+        else:
+            raise ValueError(f"❌ Error filling destination: {destination} is not exist")
     except Exception as e:
         print(f"❌ Error filling destination: {e}")
         raise
@@ -252,34 +255,63 @@ async def set_dates(page: Page, departure_date: str, flight_type: str, return_da
         return 
     try:
         departure_selector = "input[aria-label='Departure']"
-        # Ensure the initial departure input field is ready
-        await wait_for_element_to_appear(page, departure_selector, timeout_ms=10000)
-        if flight_type == "One way":
-            # Click the departure input to open the date picker
-            # Note: .nth(0) usually targets the visible input field to open the calendar.
-            await page.locator(departure_selector).nth(0).click()
-            await wait_for_element_to_appear(page, "div.WhDFk Io4vne")
+        if await wait_for_element_to_appear(page, departure_selector):
+            # Ensure the initial departure input field is ready
+            if flight_type == "One way":
+                # Click the departure input to open the date picker
+                # Note: .nth(0) usually targets the visible input field to open the calendar.
+                departure_input = page.locator(departure_selector).nth(0)
+                if await departure_input.is_visible() and await departure_input.is_enabled():
+                    element_handle = await departure_input.element_handle()
+                    if element_handle:
+                        await element_handle.evaluate("element => element.click()")
+                    else:
+                        print("🚨 Date can not be set")
+                        return
+                    # await departure_input.click()
+                    # ...continue the process...
+                else:
+                    print("🚨 Date can not be set")
+                    return
+                await wait_for_element_to_appear(page, "div.WhDFk Io4vne") # wait for calendar to visible clearly
 
-            # Assuming .nth(1) is the actual text input field within the date picker for departure
-            await page.locator(departure_selector).nth(1).fill(departure_date)
-            await page.keyboard.press("Enter")
-            await page.keyboard.press("Enter")
-            print(f"✅ Departure date {departure_date} set successfully.")
-        elif flight_type == "Round trip":
-            if parse_dates(departure_date) < datetime.now():
-                print("🚨 Please set a valid return date")
-                await page.keyboard.press("Escape")
-                return
-            await page.locator(departure_selector).nth(0).click()
-            await wait_for_element_to_appear(page, "div.WhDFk Io4vne")
-            await page.locator(departure_selector).nth(1).fill(departure_date)
-            if return_date:
-                await page.keyboard.press("Tab")
-                return_date_selector = "input[aria-label='Return']"
-                await page.locator(return_date_selector).nth(1).fill(return_date)
-                print(f"✅ Departure date {departure_date} and return date {return_date} set successfully.")
-            await page.keyboard.press("Enter")
-            await page.keyboard.press("Enter")
+                # Assuming .nth(1) is the actual text input field within the date picker for departure
+                await page.locator(departure_selector).nth(1).fill(departure_date)
+                await page.keyboard.press("Enter")
+                await page.keyboard.press("Enter")
+                print(f"✅ Departure date {departure_date} set successfully.")
+            elif flight_type == "Round trip":
+                if parse_dates(departure_date) < datetime.now():
+                    print("🚨 Please set a valid return date")
+                    await page.keyboard.press("Escape")
+                    return
+                
+                departure_input = page.locator(departure_selector).nth(0)
+                if await departure_input.is_visible() and await departure_input.is_enabled():
+                    element_handle = await departure_input.element_handle()
+                    if element_handle:
+                        await element_handle.evaluate("element => element.click()")
+                    else:
+                        print("🚨 Date can not be set")
+                        return
+                    # await departure_input.click()
+                    # ...continue the process...
+                else:
+                    print("🚨 Date can not be set")
+                    return
+                
+                await wait_for_element_to_appear(page, "div.WhDFk Io4vne")
+                await page.locator(departure_selector).nth(1).fill(departure_date)
+
+                if return_date:
+                    await page.keyboard.press("Tab")
+                    return_date_selector = "input[aria-label='Return']"
+                    await page.locator(return_date_selector).nth(1).fill(return_date)
+                    print(f"✅ Departure date {departure_date} and return date {return_date} set successfully.")
+                await page.keyboard.press("Enter")
+                await page.keyboard.press("Enter")
+        else:
+            print("🚨 Date can not be set")
     except Exception as e:
         print(f"❌ Error setting departure or return date: {e}")
         raise
@@ -344,6 +376,7 @@ async def get_departing_flights(page: Page, flight_class: str = "Economy") -> Tu
         await wait_for_element_to_appear(page, search_results_selector, timeout_ms=15000)
         if not await page.locator(search_results_selector).is_visible():
             print("🚨 No available flight for this search parameter")
+            return departing_flight_results, flight_class
         await page.locator(search_results_selector).click()
         await page.wait_for_timeout(5000)  # Wait for the search results to load
 
@@ -385,6 +418,8 @@ async def get_returning_flights(page: Page, departing_detail: str) -> Dict[str, 
     """
     returning_flight_results = {}
     try:
+        if departing_detail is None:
+            return returning_flight_results
         top_flights_selector = await page.locator("li.pIav2d").all()
         for i, flight in enumerate(top_flights_selector):
             # Select the departing flight based on the provided detail
@@ -412,7 +447,7 @@ async def get_returning_flights(page: Page, departing_detail: str) -> Dict[str, 
     
     except Exception as e:
         print(f"❌ Error retrieving returning flight: {e}")
-        raise e
+        raise
 
         
 # --- Parsing Functions ---
@@ -435,8 +470,9 @@ def parse_flight_results(flight_results: Dict[str, Any]) -> Dict[str, Any]:
 
             # price extraction
             price_m = re.search(r"From (\d+)", text)
-            price = f"Rp{int(price_m.group(1)):,}"
-            result["price"] = price
+            if price_m:
+                price = f"Rp{int(price_m.group(1)):,}"
+                result["price"] = price
 
             # number of stops extraction and airline extraction
             stops = None
@@ -488,10 +524,19 @@ def parse_flight_results(flight_results: Dict[str, Any]) -> Dict[str, Any]:
             print(f"✈️ {flight} has been parsed successfully")
             parsed_results[flight] = result
 
+            keys_allowed_to_be_none = ['layovers']
+            if any(
+                result.get(key) is None 
+                for key in result.keys() 
+                if key not in keys_allowed_to_be_none
+            ):
+                parsed_results[flight] = {"Error": "Flight details are not valid: mandatory field is None."}
+
         except Exception as e:
-            print(f"❌ Error parsing flight {flight}: {e}")
-            print(f"Raw details: {details}", end="\n\n")
-            parsed_results[flight] = {"Error": str(e)}
+            # print(f"❌ Error parsing flight {flight}: {e}")
+            # print(f"Raw details: {details}", end="\n\n")
+            # parsed_results[flight] = {"Error": str(e)}
+            raise
 
     return parsed_results
 
@@ -579,7 +624,7 @@ async def main(
                 returning_res = await get_returning_flights(page, departing_res[selected_departing_flight])
                 print("🔃 Parsing returning flights")
                 parsed_returning = parse_flight_results(returning_res)
-                print("✅ Flight search completed successfully.")
+                print("✅ Flight search completed.")
 
             # Get returning flights based on lowest price
             elif parsed_departing and search_type == "Lowest price":
@@ -596,7 +641,7 @@ async def main(
                     returning_raw_results = await get_returning_flights(page, selected_departing_flight_aria_label)
                     print("🔃 Parsing returning flights")
                     parsed_returning = parse_flight_results(returning_raw_results)
-                    print("✅ Flight search completed successfully.")
+                    print("✅ Flight search completed.")
                 else:
                     print("❌ Failed to find aria-label for the automatically selected departure flight.")
 
@@ -615,10 +660,13 @@ async def main(
                     returning_raw_results = await get_returning_flights(page, selected_departing_flight_aria_label)
                     print("🔃 Parsing returning flights")
                     parsed_returning = parse_flight_results(returning_raw_results)
-                    print("✅ Flight search completed successfully.")
+                    print("✅ Flight search completed.")
                 else:
                     print("❌ Failed to find aria-label for the automatically selected departure flight.")
-
+            
+            if not parsed_departing and not parsed_returning:
+                raise ValueError("❌ No flights found for the given criteria.")
+            
             return {
                 "departing_flights" : parsed_departing, 
                 "returning_flights" : parsed_returning
@@ -633,12 +681,15 @@ async def main(
             departing_res, flight_class_used = await get_departing_flights(page)
             parsed_departing = parse_flight_results(departing_res)
             
-            print("✅ Flight search completed successfully.")
+            if not parsed_departing :
+                raise ValueError("❌ No flights found for the given criteria.")
+            
+            print("✅ Flight search completed.")
             return {"departing_flights" : parsed_departing}
         
     except Exception as e:
         print(f"❌ Error during flight search: {e}")
-        raise
+        raise e
 
     finally:
         await browser.close()
@@ -646,16 +697,19 @@ async def main(
 
 
 if __name__ == "__main__":
-    asyncio.run(main(
-        origin="Surabaya",
-        destination="Tokyo",
-        departure_date="July 16",
-        return_date="July 20",
-        flight_type="Round trip", # "One way" or "Round trip"
-        flight_class="Economy", # [Optional] "Economy", "Premium economy", "Business", "First"
-        adults=2,
-        children=1,
-        infants_on_lap=1,
-        infants_in_seat=1,
-        search_type="Lowest price" # [Optional] "Top flights", "Lowest price", "Shortest duration"
-    ))
+    # asyncio.run(main(
+    #     origin="Jakarta",
+    #     destination="Singapore",
+    #     departure_date="July 15",
+    #     return_date="July 20",
+    #     flight_type="Round trip", # "One way" or "Round trip"
+    #     flight_class="Economy", # [Optional] "Economy", "Premium economy", "Business", "First"
+    #     adults=2,
+    #     children=1,
+    #     infants_on_lap=1,
+    #     infants_in_seat=1,
+    #     search_type="Lowest price" # [Optional] "Top flights", "Lowest price", "Shortest duration"
+    # ))
+    print(parse_flight_results({
+            'Flight X': "This is a malformed string without expected patterns."
+        }))
