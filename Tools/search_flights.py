@@ -697,19 +697,16 @@ async def main(
 
 
 if __name__ == "__main__":
-    # asyncio.run(main(
-    #     origin="Jakarta",
-    #     destination="Singapore",
-    #     departure_date="July 15",
-    #     return_date="July 20",
-    #     flight_type="Round trip", # "One way" or "Round trip"
-    #     flight_class="Economy", # [Optional] "Economy", "Premium economy", "Business", "First"
-    #     adults=2,
-    #     children=1,
-    #     infants_on_lap=1,
-    #     infants_in_seat=1,
-    #     search_type="Lowest price" # [Optional] "Top flights", "Lowest price", "Shortest duration"
-    # ))
-    print(parse_flight_results({
-            'Flight X': "This is a malformed string without expected patterns."
-        }))
+    asyncio.run(main(
+        origin="Jakarta",
+        destination="Singapore",
+        departure_date="July 15",
+        return_date="July 20",
+        flight_type="Round trip", # "One way" or "Round trip"
+        flight_class="Economy", # [Optional] "Economy", "Premium economy", "Business", "First"
+        adults=2,
+        children=1,
+        infants_on_lap=1,
+        infants_in_seat=1,
+        search_type="Lowest price" # [Optional] "Top flights", "Lowest price", "Shortest duration"
+    ))
