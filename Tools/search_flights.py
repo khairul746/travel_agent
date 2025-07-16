@@ -542,7 +542,7 @@ def parse_flight_results(flight_results: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # --- Main Execution ---   
-async def main(
+async def search_flights(
     origin: str,
     destination: str,
     departure_date: str,
@@ -697,7 +697,7 @@ async def main(
 
 
 if __name__ == "__main__":
-    asyncio.run(main(
+    asyncio.run(search_flights(
         origin="Jakarta",
         destination="Singapore",
         departure_date="July 15",
