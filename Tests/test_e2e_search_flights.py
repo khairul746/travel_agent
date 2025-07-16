@@ -34,8 +34,8 @@ class TestFlightSearchE2E(unittest.IsolatedAsyncioTestCase):
         print("\n--- Running E2E Test: Round Trip - Lowest Price ---")
         origin = "Jakarta"
         destination = "Singapore"
-        departure_date = "July 15" # Ensure this date is in the future
-        return_date = "July 20"   # Ensure this date is in the future
+        departure_date = "August 17" # Ensure this date is in the future
+        return_date = "August 20"   # Ensure this date is in the future
 
         results = await main(
             origin=origin,
@@ -93,8 +93,8 @@ class TestFlightSearchE2E(unittest.IsolatedAsyncioTestCase):
         print("\n--- Running E2E Test: Round Trip - Multiple Passengers - Shortest Duration ---")
         origin = "Jakarta"
         destination = "Tokyo"
-        departure_date = "July 16" # Future date
-        return_date = "July 20"   # Future date
+        departure_date = "August 16" # Future date
+        return_date = "August 20"   # Future date
 
         results = await main(
             origin=origin,

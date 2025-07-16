@@ -14,9 +14,9 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(clean_price_string('Rp41,724,888'), 41724888)
         self.assertEqual(clean_price_string('Rp1,000,000'), 1000000)
         self.assertEqual(clean_price_string('Rp100'), 100)
-        self.assertEqual(clean_price_string('41,724,888'), 41724888) # Should handle without 'Rp' too
+        self.assertEqual(clean_price_string('41,724,888'), 41724888) 
         self.assertEqual(clean_price_string('Rp500.000'), 500000)
-        self.assertEqual(clean_price_string('Invalid Price'), float('inf')) # Should return inf for invalid string
+        self.assertEqual(clean_price_string('Invalid Price'), float('inf'))
 
     def test_convert_duration_to_minutes(self):
         self.assertEqual(convert_duration_to_minutes('18 hr 5 min'), (18 * 60) + 5)
@@ -24,7 +24,7 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(convert_duration_to_minutes('45 min'), 45)
         self.assertEqual(convert_duration_to_minutes('2 hr'), 120)
         self.assertEqual(convert_duration_to_minutes('0 hr 0 min'), 0)
-        self.assertEqual(convert_duration_to_minutes('unknown'), 0) # Should return 0 if no match
+        self.assertEqual(convert_duration_to_minutes('unknown'), 0)
 
     def test_parse_flight_results(self):
         raw_data_single_flight = {
