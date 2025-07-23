@@ -7,7 +7,7 @@ import os
 # Add the parent directory of search_flights.py to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from Tools.search_flights import main, parse_flight_results # Import parse_flight_results for assertions
+from Tools.search_flights import search_flights, parse_flight_results # Import parse_flight_results for assertions
 # Import other functions if you want to test them individually
 # from search_flights import select_flight_type, fill_origin, ...
 
@@ -37,7 +37,7 @@ class TestFlightSearchE2E(unittest.IsolatedAsyncioTestCase):
         departure_date = "August 17" # Ensure this date is in the future
         return_date = "August 20"   # Ensure this date is in the future
 
-        results = await main(
+        results = await search_flights(
             origin=origin,
             destination=destination,
             departure_date=departure_date,
@@ -70,9 +70,9 @@ class TestFlightSearchE2E(unittest.IsolatedAsyncioTestCase):
         print("\n--- Running E2E Test: One Way Search ---")
         origin = "Surabaya"
         destination = "London"
-        departure_date = "July 20" # Ensure this date is in the future
+        departure_date = "August 20" # Ensure this date is in the future
 
-        results = await main(
+        results = await search_flights(
             origin=origin,
             destination=destination,
             departure_date=departure_date,
@@ -96,7 +96,7 @@ class TestFlightSearchE2E(unittest.IsolatedAsyncioTestCase):
         departure_date = "August 16" # Future date
         return_date = "August 20"   # Future date
 
-        results = await main(
+        results = await search_flights(
             origin=origin,
             destination=destination,
             departure_date=departure_date,
@@ -129,8 +129,8 @@ class TestFlightSearchE2E(unittest.IsolatedAsyncioTestCase):
         return_date = "December 30"
 
         # Expect an exception for invalid origin/destination or no results
-        with self.assertRaises(Exception) as cm: # Catch the raised exception from main
-            await main(
+        with self.assertRaises(Exception) as cm: # Catch the raised exception from search_flights
+            await search_flights(
                 origin=origin,
                 destination=destination,
                 departure_date=departure_date,
