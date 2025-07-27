@@ -38,11 +38,20 @@ agent = create_react_agent(llm, tools, checkpointer=memory)
 
 async def main():
     config = {"thread_id":"agent1", "recursion_limit":15}
-    response = await agent.ainvoke({"messages":"Please provide me flight from Jakarta to Bali on August 20"}, config=config)
-    print(response["messages"][-1].content)
+    print("type 'exit' or 'quit' to end the chat session")
+    print("="*50)
+    input_message = ""
+    while input_message != "quit" or input_message != "exit":
+        input_message = input("🧑 User  : ")
+        print()
+        response = await agent.ainvoke({"messages":f"{input_message}"}, config=config)
+        print(f"🤖 Agent : {response['messages'][-1].content}")
+        print()
+        if input_message == "quit" or input_message == "exit":
+            break
 
-if __name__ == "__main__":
-    asyncio.run(main())
+
+asyncio.run(main())
 
 
 
