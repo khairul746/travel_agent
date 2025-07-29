@@ -521,7 +521,7 @@ def parse_flight_results(flight_results: Dict[str, Any]) -> Dict[str, Any]:
                     'layover_airport': lay.group(4)
                 })
             result['layovers'] = layovers if layovers else None
-            print(f"✈️ {flight} has been parsed successfully")
+            # print(f"✈️ {flight} has been parsed successfully")
             parsed_results[flight] = result
 
             keys_allowed_to_be_none = ['layovers']
@@ -697,11 +697,11 @@ async def search_flights(
 
 
 if __name__ == "__main__":
-    asyncio.run(search_flights(
+    print(asyncio.run(search_flights(
         origin="Jakarta",
         destination="Singapore",
-        departure_date="July 15",
-        return_date="July 20",
+        departure_date="August 15",
+        return_date="August 20",
         flight_type="Round trip", # "One way" or "Round trip"
         flight_class="Economy", # [Optional] "Economy", "Premium economy", "Business", "First"
         adults=2,
@@ -709,4 +709,4 @@ if __name__ == "__main__":
         infants_on_lap=1,
         infants_in_seat=1,
         search_type="Lowest price" # [Optional] "Top flights", "Lowest price", "Shortest duration"
-    ))
+    )))
