@@ -6,9 +6,7 @@ import groq
 from langchain_groq import ChatGroq
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.prebuilt import create_react_agent
-from langgraph.prebuilt import ToolNode, tools_condition
 from tools import search_flights_tool
-from langchain_core.tools import tool
 
 # Load environment variables
 load_dotenv()
@@ -48,7 +46,8 @@ async def main():
             agent_no += 1
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
 
 
 
