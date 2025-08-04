@@ -6,7 +6,7 @@ import groq
 from langchain_groq import ChatGroq
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.prebuilt import create_react_agent
-from tools import search_flights_tool
+from Agent.tools import search_flights_tool
 
 # Load environment variables
 load_dotenv()
