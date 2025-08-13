@@ -126,12 +126,12 @@ async def fetch_page(url: str) -> Tuple[async_playwright, Browser, Page]:
     """
 
     p = await async_playwright().start()
-    browser = await p.chromium.launch(headless=False, slow_mo=50)  # Set headless to False for debugging
+    browser = await p.chromium.launch(headless=True)  # Set headless to False for debugging
     page = await browser.new_page()
-    # headers = {
-    #     "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Edg/138.0.0.0"
-    # }
-    # await page.set_extra_http_headers(headers)
+    headers = {
+        "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Edg/138.0.0.0"
+    }
+    await page.set_extra_http_headers(headers)
     await page.goto(url)
 
     # Click the dropdown trigger for flight type
@@ -478,7 +478,8 @@ async def get_flight_urls(
     page: Page, 
     flight_results: Dict[str, Any], 
     flight_no: int = 1,
-    popup_wait_ms: int = 3000 #wait time after popup appears (ms)
+    popup_wait_ms: int = 3000, #wait time after popup appears (ms)
+    max_providers: Optional[int] = 5
 ) -> List[Dict[str, str]]:
     """
     Collect all booking (merchant) URLs for one selected flight on Google Flights.
@@ -515,6 +516,9 @@ async def get_flight_urls(
     total_cards = await booking_cards.count()
 
     for idx in range(total_cards):
+        if max_providers is not None and idx >= max_providers:
+            break
+
         book = booking_cards.nth(idx)
 
         # Try continue/go to site/book buttons
@@ -632,7 +636,6 @@ async def search_flights(
         
         # Get departing flights
         departing_res, flight_class_used = await get_flights(page)
-        flight_url = await get_flight_urls(page, departing_res, 2)
         parsed_departing = parse_flight_results(departing_res)
         
         if not parsed_departing :
