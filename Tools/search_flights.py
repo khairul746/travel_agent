@@ -1,17 +1,14 @@
 import asyncio, sys, os
 from playwright.async_api import async_playwright, Page, Browser, TimeoutError as PlaywrightTimeoutError  # type: ignore
-from typing import Dict, Any, Optional, Tuple, List, Literal
+from typing import Dict, Any, Optional, Tuple, List, Literal, Union
 import re
 from datetime import datetime
 from uuid import uuid4
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from Utils.session_manager import create_session, close_session, get_session, SESSIONS
-from Utils.schemas import (
-    FlightSearchInput, SearchFlightsResult, FlightItem,
-    GetFlightURLsInput, GetFlightURLsResult, BookingOption,
-    CloseSessionInput
-)
+from Utils.schemas import FlightSearchInput, GetFlightURLsInput, CloseSessionInput
+
 
 # --- Helper Functions ---
 async def wait_for_element_to_appear(
@@ -39,7 +36,7 @@ async def wait_for_element_to_appear(
     return False
 
 
-def clean_price_string(price_str: str) -> int:
+def clean_price_string(price_str: str) -> Optional[int]:
     """
     Cleans a price string (e.g., 'Rp41,724,888') and converts it to an integer.
     Removes 'Rp' prefix and commas.
@@ -91,7 +88,7 @@ def parse_dates(input_dates: str, default_year: int = None):
 
     if input_dates is None:
         raise ValueError("Date input cannot be None. Please provide a valid date string.")
-    input_dates = input_dates.strip()
+    base = input_dates.strip()
     year = default_year or datetime.now().year
         
     candidate_format = [
@@ -110,48 +107,12 @@ def parse_dates(input_dates: str, default_year: int = None):
 
     for fmt, need_year in candidate_format:
         try:
-            if need_year:
-                input_dates = f"{input_dates} {year}"
-                return datetime.strptime(input_dates, fmt + " %Y")
-            else:
-                return datetime.strptime(input_dates, fmt)
+            probe = f"{base} {year}" if need_year else base
+            return datetime.strptime(probe, fmt + (" %Y" if need_year else ""))
         except ValueError:
             continue
 
     raise ValueError(f"Date format not recognized: '{input_dates}'")
-
-
-# --- Core Playwright Setup ---
-async def fetch_page(url: str) -> Tuple[async_playwright, Browser, Page]:
-    """
-    Launches Playwright browser and navigates to the page.
-
-    Args:
-        url (str): URL of the page to fetch.
-
-    Returns:
-        tuple: (playwright, browser, page) if successful.
-    """
-
-    p = await async_playwright().start()
-    browser = await p.chromium.launch(headless=True)  # Set headless to False for debugging
-    page = await browser.new_page()
-    headers = {
-        "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Edg/138.0.0.0"
-    }
-    await page.set_extra_http_headers(headers)
-    await page.goto(url)
-
-    # Click the dropdown trigger for flight type
-    await wait_for_element_to_appear(page, "div.VfPpkd-aPP78e", timeout_ms=10000)
-    await page.locator("div.VfPpkd-aPP78e").first.click()
-
-    # Wait for the options to appear and select the desired flight type
-    await wait_for_element_to_appear(page, "li[role='option']", timeout_ms=10000)
-    await page.wait_for_timeout(500)  # Ensure the options are fully loaded
-    await page.locator(f"li[role='option']:has-text('One way')").first.click()
-
-    return p, browser, page
 
 
 # --- Interaction Functions ---
@@ -441,7 +402,7 @@ def parse_flight_results(flight_results: Dict[str, Any]) -> Dict[str, Any]:
             # print(f"✈️ {flight} has been parsed successfully")
             parsed_results[flight] = result
 
-            keys_allowed_to_be_none = ['layovers']
+            keys_allowed_to_be_none = ['layovers', 'airlines', 'flight_duration']
             if any(
                 result.get(key) is None 
                 for key in result.keys() 
@@ -458,24 +419,24 @@ def parse_flight_results(flight_results: Dict[str, Any]) -> Dict[str, Any]:
     return parsed_results
 
 # --- URL Extraction Functions ---
-async def extract_logo_url(page: Page) -> str:
+async def extract_logo_url(root) -> str:
     """Extract booking agent logo URL from style attribute."""
-    logo_locator = page.locator("div[class='MnHIn P2UJoe']").first
+    logo_locator = root.locator("div[class='MnHIn P2UJoe']").first
     style_attr = await logo_locator.get_attribute("style") or ""
     match = re.findall(r"url\((.*?)\)", style_attr)
     return match[0] if match else ""
 
-async def extract_price(page: Page) -> str:
+async def extract_price(root) -> str:
     """Extract booking price, replacing non-breaking spaces."""
-    price_locator = page.locator("div.ScwYP")
-    if await wait_for_element_to_appear(page, "div.ScwYP"):
+    price_locator = root.locator("div.ScwYP")
+    if await wait_for_element_to_appear(root, "div.ScwYP"):
         price = await price_locator.inner_text()
         return price.replace("\u00A0", " ")
     return "Visit site for price"
 
-async def extract_booking_name(page: Page, xpath: str, pattern: str) -> str:
+async def extract_booking_name(root, xpath: str, pattern: str) -> str:
     """Extract booking agent/provider name using an XPath and regex pattern."""
-    name_locator = page.locator(xpath)
+    name_locator = root.locator(xpath)
     booking_name = await name_locator.inner_text()
     match = re.findall(pattern, booking_name)
     return match[0].strip() if match else None
@@ -483,7 +444,7 @@ async def extract_booking_name(page: Page, xpath: str, pattern: str) -> str:
 async def get_flight_urls(
     page: Page, 
     flight_results: Dict[str, Any], 
-    flight_no: int = 1,
+    flight_no: Union[int,str] = 1,
     popup_wait_ms: int = 3000, #wait time after popup appears (ms)
     max_providers: Optional[int] = 5
 ) -> List[Dict[str, str]]:
@@ -529,18 +490,18 @@ async def get_flight_urls(
 
         # Try continue/go to site/book buttons
         ctn_selector = "button:has-text('Continue'), button:has-text('Go to site'), button:has-text('Book')" 
-        has_ctn = await wait_for_element_to_appear(page, ctn_selector)
+        has_ctn = await wait_for_element_to_appear(book, ctn_selector)
 
         booking_option = {}
 
         if has_ctn:
-            booking_option["logo_url"] = await extract_logo_url(page)
+            booking_option["logo_url"] = await extract_logo_url(book)
             booking_option["provider"] = await extract_booking_name(
-                page,
+                book,
                 "//div[@class='ogfYpf AdWm1c' and contains(normalize-space(.), 'Book ') and contains(normalize-space(.), ' with')]",
                 r"Book\s+with\s+(.+)"
             )
-            booking_option["price"] = await extract_price(page)
+            booking_option["price"] = await extract_price(book)
 
             # Click and capture booking URL
             btn = book.locator(ctn_selector).first
@@ -567,14 +528,14 @@ async def get_flight_urls(
                 await wait_for_element_to_appear(page, "div.gN1nAc")
 
         else:
-            booking_option["logo_url"] = await extract_logo_url(page)
+            booking_option["logo_url"] = await extract_logo_url(book)
             booking_option["provider"] = await extract_booking_name(
-                page,
+                book,
                 "//div[@class='ogfYpf AdWm1c' and contains(normalize-space(.), 'Call ') and contains(normalize-space(.), ' to book')]",
                 r"Call\s+(.+)\s+to\s+book"
             )
-            booking_option["price"] = await extract_price(page)
-            booking_option["call_number"] = await page.locator("div.bcmwcd").inner_text()
+            booking_option["price"] = await extract_price(book)
+            booking_option["call_number"] = await book.locator("div.bcmwcd").inner_text()
 
         booking_options.append(booking_option)
 
@@ -593,7 +554,7 @@ async def search_flights_tool_fn(
     infants_on_lap: int = 0,
     infants_in_seat: int = 0,
     headless: bool = True,
-) -> SearchFlightsResult:
+) -> Dict[str, Any]:
     """
     1) Create a new Playwright session (unclosed)
     2) Run a ONE-WAY search flow
@@ -610,9 +571,9 @@ async def search_flights_tool_fn(
         infants_in_seat (int): Number of infants in seat. Defaults to 0.
         headless (bool): Whether to run the browser in headless mode. Defaults to True.
     Returns:
-        SearchFlightsResult: Result of the search.
+        Dict[str, Any]: A dictionary containing:
             session_id (str | None): Reusable session id when flights are found; None if nothing found.
-            flights (List[FlightItem]): Human-readable summaries with 1-based indices.
+            flights (Dict[str, Any] | None): Flights search results containing price, airline, number of stops, etc.
             flight_class_used (str | None): Cabin actually used by Google Flights for these results.
             message (str): Status text (e.g., "Found N flights. Pick one by index (1..N).").
     """
@@ -663,28 +624,29 @@ async def search_flights_tool_fn(
 
         # Get departing flights
         departing_res, flight_class_used = await get_flights(page)
-        parsed = parse_flight_results(departing_res)
+        parsed_flights = parse_flight_results(departing_res)
 
-        if not parsed:
+        if not parsed_flights:
             await close_session(sid)
-            return SearchFlightsResult(session_id=None, flights=[], flight_class_used=None,
-                                       message="No flights found for the given criteria.")
+            return {
+                "session_id": None, 
+                "flights": None, 
+                "flight_class_used": None,
+                "message": "No flights found for the given criteria."
+            }
 
         # store RAW in session so get_flight_urls_tool can be used without large payload
         sess.data["raw_flights"] = departing_res
 
-        items = [FlightItem(index=i + 1, summary=summary)
-         for i, summary in enumerate(departing_res.values())]
-        list_text = "\n".join(f"{it.index}. {it.summary}" for it in items)
-        return SearchFlightsResult(
-            session_id=sid,
-            flights=items,
-            flight_class_used=flight_class_used,
-            message=
-            f"Found {len(items)} flights:\n{list_text}\n\n"
-            f"Pick one by index (1..{len(items)}) and I'll fetch booking URLs."
-
-        )
+        
+        return {
+            "session_id": sid,
+            "flights": parsed_flights,
+            "flight_class_used": flight_class_used,
+            "message": f"Found {len(parsed_flights)} flights. "
+                       f"Pick one by index (1..{len(parsed_flights)}) and I'll fetch booking URLs."
+        }
+        
     except Exception:
         # if error, clean the newly created session
         try: await close_session(sid)
@@ -692,30 +654,28 @@ async def search_flights_tool_fn(
         raise
 
 async def get_flight_urls_tool_fn(session_id: str,
-    flight_no: int = 1,
+    flight_no: Union[int,str] = 1,
     max_providers: Optional[int] = 5,
     popup_wait_timeout: int = 10000,
-) -> GetFlightURLsResult:
+)-> List[Dict[str, str]]:
     """
     Using an existing session created by `search_flights_tool_fn`, open the selected
     flight's offers panel and collect booking (merchant) options and their URLs.
 
     Args:
         session_id (str): Session id returned by `search_flights_tool_fn`.
-        flight_no (int): 1-based index of the flight to open. Default 1.
+        flight_no (str): 1-based index of the flight to open. Default 1.
         max_providers (int | None): Maximum number of booking providers to return. Default 5.
         popup_wait_timeout (int): Milliseconds to wait after a new tab/pop-up appears
                                     before reading its URL. Default 10000.
 
     Returns:
-        GetFlightURLsResult: The selected flight number and its available booking options.
-            flight_no (int): Echo of the requested flight number.
-            options (List[BookingOption]): List of providers with metadata:
-                provider (str | None): Booking agent/merchant name.
-                price (str | None): Price text as displayed (may include currency).
-                logo_url (str | None): Logo image URL if available.
-                call_number (str | None): Phone number when booking is by call.
-                booking_url (str | None): Direct URL captured from the provider button/tab.
+        booking_options (List[Dict[str,str]]): List of providers with metadata:
+            provider (str | None): Booking agent/merchant name.
+            price (str | None): Price text as displayed (may include currency).
+            logo_url (str | None): Logo image URL if available.
+            call_number (str | None): Phone number when booking is by call.
+            booking_url (str | None): Direct URL captured from the provider button/tab.
 
     Raises:
         RuntimeError: If the session has no `raw_flights` (you must run search first).
@@ -733,17 +693,14 @@ async def get_flight_urls_tool_fn(session_id: str,
     if not raw:
         raise RuntimeError("Missing raw_flights in session. Run search_flights first.")
 
-    options = await get_flight_urls(
+    return await get_flight_urls(
         page,
         raw,
         flight_no=params.flight_no,
         max_providers=params.max_providers,
         popup_wait_ms=params.popup_wait_timeout,
     )
-    return GetFlightURLsResult(
-        flight_no=params.flight_no,
-        options=[BookingOption(**o) for o in options]
-    )
+    
 
 async def close_session_tool_fn(session_id: str) -> str:
     """
@@ -766,21 +723,27 @@ if __name__ == "__main__":
         sid = None
         try:
             res = await search_flights_tool_fn(
-                FlightSearchInput(
-                    origin="Seoul",
-                    destination="Bangkok",
-                    departure_date="August 31",
-                    flight_class="Economy",
-                    adults=2,
-                    children=1,
-                    infants_on_lap=1,
-                    infants_in_seat=1,
-                    headless=True,
-                )
+                origin="Seoul",
+                destination="Bangkok",
+                departure_date="August 31",
+                flight_class="Economy",
+                adults=2,
+                children=1,
+                infants_on_lap=1,
+                infants_in_seat=1,
+                headless=True,
             )
-            sid = res.session_id
+            sid = res["session_id"]
+            print(res["flights"])
+            flight_no = input("Enter flight number to get booking URLs (1-based index): ")
+            print(await get_flight_urls_tool_fn(
+                session_id=sid,
+                flight_no=flight_no,
+                max_providers=3,
+                popup_wait_timeout=5000,
+            ))
         finally:
             if sid:
-                await close_session_tool_fn(CloseSessionInput(session_id=sid))
+                await close_session_tool_fn(session_id=sid)
 
     asyncio.run(_demo())
