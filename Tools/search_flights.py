@@ -657,7 +657,7 @@ async def get_flight_urls_tool_fn(session_id: str,
     flight_no: Union[int,str] = 1,
     max_providers: Optional[int] = 5,
     popup_wait_timeout: int = 10000,
-)-> List[Dict[str, str]]:
+)-> List[Dict[str, Any]]:
     """
     Using an existing session created by `search_flights_tool_fn`, open the selected
     flight's offers panel and collect booking (merchant) options and their URLs.
@@ -702,7 +702,7 @@ async def get_flight_urls_tool_fn(session_id: str,
     )
     
 
-async def close_session_tool_fn(session_id: str) -> str:
+async def close_session_tool_fn(session_id: str) -> Dict[str, Any]:
     """
     Close and dispose a previously created Playwright session.
 
@@ -710,12 +710,12 @@ async def close_session_tool_fn(session_id: str) -> str:
         session_id (str): The id of the session to close.
 
     Returns:
-        str: The message "Session closed." (returned even if the session id
-             was not found or had already been closed).
+        Dict[str, Any]: A dictionary with a single key:
+            messages (str): A message indicating the session has been closed.
     """
     params = CloseSessionInput(session_id=session_id)
     await close_session(params.session_id)
-    return "Session closed."
+    return {"messages": "Session closed."}
 
 
 if __name__ == "__main__":

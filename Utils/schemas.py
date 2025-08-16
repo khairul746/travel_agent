@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Literal
+from typing import Optional, Literal
 from pydantic import BaseModel, Field
 
 class FlightSearchInput(BaseModel):
@@ -20,7 +20,7 @@ class FlightSearchInput(BaseModel):
 
 class GetFlightURLsInput(BaseModel):
     session_id: str
-    flight_no: int = 1
+    flight_no: Optional[int|str] = 1
     max_providers: Optional[int] = 5
     popup_wait_timeout: int = 10000
 

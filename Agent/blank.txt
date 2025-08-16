@@ -1,0 +1,30 @@
+[
+  {
+    'name': 'search_flights', 
+    'input': 
+    "{
+      'departure_date': 'September 5', 
+      'destination': 'Hanoi', 
+      'origin': 'Shenzen'
+    }"
+  }, 
+  {
+    'name': 'search_flights', 
+    'input': "{
+      'departure_date': 'September 5', 
+      'destination': 'Hanoi', 
+      'origin': 'Shenzhen'
+      }", 
+    'output': ToolMessage(
+      content='{
+        "session_id": "a2257a61-7b6e-4d3b-ad83-a4ee898c9ad0", 
+        "flights": {
+          "Flight 1": {
+            "price": "Rp2,139,383", "stops": 0, "airlines": ["Shenzhen"], "departure_airport": "Shenzhen Bao\'an International Airport", "departure_time": "11:55 PM", "departure_date": "Friday, September 5", "arrival_airport": "Noi Bai International Airport", "arrival_time": "1:10 AM", "arrival_date": "Saturday, September 6", "flight_duration": "2 hr 15 min", "layovers": null}, "Flight 2": {"price": "Rp2,387,363", "stops": 0, "airlines": ["Shenzhen"], "departure_airport": "Shenzhen Bao\'an International Airport", "departure_time": "7:30 AM", "departure_date": "Friday, September 5", "arrival_airport": "Noi Bai International Airport", "arrival_time": "8:40 AM", "arrival_date": "Friday, September 5", "flight_duration": "2 hr 10 min", "layovers": null}, "Flight 3": {"price": "Rp2,838,234", "stops": 0, "airlines": ["China Southern"], "departure_airport": "Shenzhen Bao\'an International Airport", "departure_time": "2:40 PM", "departure_date": "Friday, September 5", "arrival_airport": "Noi Bai International Airport", "arrival_time": "3:45 PM", "arrival_date": "Friday, September 5", "flight_duration": "2 hr 5 min", "layovers": null}, "Flight 4": {"price": "Rp2,184,471", "stops": 1, "airlines": ["XiamenAir"], "departure_airport": "Shenzhen Bao\'an International Airport", "departure_time": "10:25 PM", "departure_date": "Friday, September 5", "arrival_airport": "Noi Bai International Airport", "arrival_time": "10:10 AM", "arrival_date": "Sunday, September 7", "flight_duration": "36 hr 45 min", "layovers": [{"layover_number": 1, "layover_duration": "32 hr 30 min", "overnight": true, "layover_airport": "Fuzhou Changle International Airport in Fuzhou"}]}, "Flight 5": {"price": "Rp2,342,275", "stops": 1, "airlines": ["China Eastern"], "departure_airport": "Shenzhen Bao\'an International Airport", "departure_time": "7:00 PM", "departure_date": "Friday, September 5", "arrival_airport": "Noi Bai International Airport", "arrival_time": "1:20 AM", "arrival_date": "Saturday, September 6", "flight_duration": "7 hr 20 min", "layovers": [{"layover_number": 1, "layover_duration": "1 hr 20 min", "overnight": false, "layover_airport": "Shanghai Pudong International Airport in Shanghai"}]}, "Flight 6": {"price": "Rp2,838,234", "stops": 0, "airlines": ["China Southern"], "departure_airport": "Shenzhen Bao\'an International Airport", "departure_time": "12:35 PM", "departure_date": "Friday, September 5", "arrival_airport": "Noi Bai International Airport", "arrival_time": "1:40 PM", "arrival_date": "Friday, September 5", "flight_duration": "2 hr 5 min", "layovers": null}, "Flight 7": {"price": "Rp2,838,234", "stops": 0, "airlines": ["Shenzhen"], "departure_airport": "Shenzhen Bao\'an International Airport", "departure_time": "1:05 PM", "departure_date": "Friday, September 5", "arrival_airport": "Noi Bai International Airport", "arrival_time": "2:05 PM", "arrival_date": "Friday, September 5", "flight_duration": "2 hr", "layovers": null}, "Flight 8": {"price": "Rp2,838,234", "stops": 0, "airlines": ["Shenzhen"], "departure_airport": "Shenzhen Bao\'an International Airport", "departure_time": "4:35 PM", "departure_date": "Friday, September 5", "arrival_airport": "Noi Bai International Airport", "arrival_time": "5:40 PM", "arrival_date": "Friday, September 5", "flight_duration": "2 hr 5 min", "layovers": null}}, 
+        "flight_class_used": "Economy", 
+        "message": "Found 8 flights. Pick one by index (1..8) and I\'ll fetch booking URLs.
+        "}', 
+      name='search_flights', 
+      id='9b9b0ccd-6946-4000-9712-fc74fd639442', tool_call_id='7fcwqrk2s')
+  }
+]
