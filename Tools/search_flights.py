@@ -456,89 +456,109 @@ async def get_flight_urls(
     # Get selected flight detail
     detail = flight_results.get(f"Flight {flight_no}")
     if not detail:
-        raise ValueError(f"There is no Flight {flight_no} in flight_results.")
+        raise ValueError(f"❌ There is no Flight {flight_no} in flight_results.")
 
-    # Locate and click flight card
-    flight_summary = page.locator(f'li.pIav2d div.JMc5Xc[aria-label="{detail}"]').first
-    await flight_summary.scroll_into_view_if_needed()
-    flight_card = flight_summary.locator("xpath=ancestor::li[contains(@class,'pIav2d')]").first
-    await flight_card.click()
+    try:
+        # Locate and click flight card
+        flight_summary = page.locator(f'li.pIav2d div.JMc5Xc[aria-label="{detail}"]').first
+        await flight_summary.scroll_into_view_if_needed()
+        flight_card = flight_summary.locator("xpath=ancestor::li[contains(@class,'pIav2d')]").first
+        await flight_card.click()
+        print("✅ Flight card clicked successfully.")
 
-    # Case 1: No booking options
-    if await page.locator(
-        "div:has-text('We can’t find booking options for this itinerary. Try changing your flights to see booking options.')"
-    ).is_visible():
-        booking_options.append({
-            "message": "We can’t find booking options for this itinerary. Try changing your flights to see booking options."
-        })
-        return booking_options
+        # Case 1: No booking options
+        if await page.locator(
+            "div:has-text('We can’t find booking options for this itinerary. Try changing your flights to see booking options.')"
+        ).is_visible():
+            booking_options.append({
+                "message": "We can’t find booking options for this itinerary. Try changing your flights to see booking options."
+            })
+            print("🚨 No booking options found for this flight.")
+            await page.go_back()
+            return booking_options
 
-    # Case 2: Page error
-    if await page.locator("h1.YAGsO:has-text('Oops, something went wrong.')").is_visible():
-        await page.locator("span.VfPpkd-vQzf8d:has-text('Reload')").click()
+        # Case 2: Page error
+        if await page.locator("h1.YAGsO:has-text('Oops, something went wrong.')").is_visible():
+            await page.locator("span.VfPpkd-vQzf8d:has-text('Reload')").click()
+            print("🔄 Page reloaded due to error.")
 
-    # Case 3: Booking options available
-    await wait_for_element_to_appear(page, "div.gN1nAc")
-    booking_cards = page.locator("div.gN1nAc")
-    total_cards = await booking_cards.count()
+        # Case 3: Booking options available
+        await wait_for_element_to_appear(page, "div.gN1nAc")
+        booking_cards = page.locator("div.gN1nAc")
+        total_cards = await booking_cards.count()
 
-    for idx in range(total_cards):
-        if max_providers is not None and idx >= max_providers:
-            break
+        for idx in range(total_cards):
+            if max_providers is not None and idx >= max_providers:
+                break
 
-        book = booking_cards.nth(idx)
+            book = booking_cards.nth(idx)
 
-        # Try continue/go to site/book buttons
-        ctn_selector = "button:has-text('Continue'), button:has-text('Go to site'), button:has-text('Book')" 
-        has_ctn = await wait_for_element_to_appear(book, ctn_selector)
+            # Try continue/go to site/book buttons
+            ctn_selector = "button:has-text('Continue'), button:has-text('Go to site'), button:has-text('Book')" 
+            has_ctn = await wait_for_element_to_appear(book, ctn_selector)
 
-        booking_option = {}
+            booking_option = {}
 
-        if has_ctn:
-            booking_option["logo_url"] = await extract_logo_url(book)
-            booking_option["provider"] = await extract_booking_name(
-                book,
-                "//div[@class='ogfYpf AdWm1c' and contains(normalize-space(.), 'Book ') and contains(normalize-space(.), ' with')]",
-                r"Book\s+with\s+(.+)"
-            )
-            booking_option["price"] = await extract_price(book)
-
-            # Click and capture booking URL
-            btn = book.locator(ctn_selector).first
-            new_page = None
-            try:
-                async with page.context.expect_page(timeout=3000) as w:
-                    await btn.click()
-                new_page = await w.value
-            except PlaywrightTimeoutError:
+            if has_ctn:
+                booking_option["logo_url"] = await extract_logo_url(book)
+                print("✅ Logo URL extracted successfully.")
+                booking_option["provider"] = await extract_booking_name(
+                    book,
+                    "//div[@class='ogfYpf AdWm1c' and contains(normalize-space(.), 'Book ') and contains(normalize-space(.), ' with')]",
+                    r"Book\s+with\s+(.+)"
+                )
+                print("✅ Provider name extracted successfully.")
+                booking_option["price"] = await extract_price(book)
+                print("✅ Price extracted successfully.")
+                # Click and capture booking URL
+                btn = book.locator(ctn_selector).first
+                new_page = None
                 try:
-                    await asyncio.wait_for(page.wait_for_load_state("domcontentloaded"), timeout=8000)
-                except asyncio.TimeoutError:
-                    pass
+                    async with page.context.expect_page(timeout=3000) as w:
+                        await btn.click()
+                    new_page = await w.value
+                except PlaywrightTimeoutError:
+                    try:
+                        await asyncio.wait_for(page.wait_for_load_state("domcontentloaded"), timeout=8000)
+                    except asyncio.TimeoutError:
+                        pass
 
-            if new_page:
-                await new_page.wait_for_load_state("load")
-                await asyncio.sleep(popup_wait_ms / 1000)
-                booking_option["booking_url"] = new_page.url
-                await new_page.close()
+                if new_page:
+                    await new_page.wait_for_load_state("load")
+                    await asyncio.sleep(popup_wait_ms / 1000)
+                    booking_option["booking_url"] = new_page.url
+                    print(f"✅ Booking URL extracted successfully")
+                    await new_page.close()
+                else:
+                    await asyncio.sleep(popup_wait_ms / 1000)
+                    booking_option["booking_url"] = page.url
+                    await page.go_back()
+                    print("🔙 Returned to the main page after no popup appeared.")
+                    await wait_for_element_to_appear(page, "div.gN1nAc")
+
             else:
-                await asyncio.sleep(popup_wait_ms / 1000)
-                booking_option["booking_url"] = page.url
-                await page.go_back()
-                await wait_for_element_to_appear(page, "div.gN1nAc")
+                booking_option["logo_url"] = await extract_logo_url(book)
+                print("✅ Logo URL extracted successfully.") 
+                booking_option["provider"] = await extract_booking_name(
+                    book,
+                    "//div[@class='ogfYpf AdWm1c' and contains(normalize-space(.), 'Call ') and contains(normalize-space(.), ' to book')]",
+                    r"Call\s+(.+)\s+to\s+book"
+                )
+                print("✅ Provider name extracted successfully.")
+                booking_option["price"] = await extract_price(book)
+                print("✅ Price extracted successfully.")
+                booking_option["call_number"] = await book.locator("div.bcmwcd").inner_text()
+                print("✅ Call number extracted successfully.")
 
-        else:
-            booking_option["logo_url"] = await extract_logo_url(book)
-            booking_option["provider"] = await extract_booking_name(
-                book,
-                "//div[@class='ogfYpf AdWm1c' and contains(normalize-space(.), 'Call ') and contains(normalize-space(.), ' to book')]",
-                r"Call\s+(.+)\s+to\s+book"
-            )
-            booking_option["price"] = await extract_price(book)
-            booking_option["call_number"] = await book.locator("div.bcmwcd").inner_text()
-
-        booking_options.append(booking_option)
-
+            booking_options.append(booking_option)
+        await page.go_back()
+        print(f"✅ Extracted {len(booking_options)} booking options successfully.")
+    
+    except Exception as e:
+        booking_options = "Failed to fetch links."
+        print(e)
+        return booking_options
+    
     return booking_options
 
 # ---------- Tool-ready functions (tinggal di-import di tools.py) ----------
@@ -643,8 +663,6 @@ async def search_flights_tool_fn(
             "session_id": sid,
             "flights": parsed_flights,
             "flight_class_used": flight_class_used,
-            "message": f"Found {len(parsed_flights)} flights. "
-                       f"Pick one by index (1..{len(parsed_flights)}) and I'll fetch booking URLs."
         }
         
     except Exception:
@@ -725,13 +743,13 @@ if __name__ == "__main__":
             res = await search_flights_tool_fn(
                 origin="Seoul",
                 destination="Bangkok",
-                departure_date="August 31",
+                departure_date="October 31",
                 flight_class="Economy",
                 adults=2,
                 children=1,
                 infants_on_lap=1,
                 infants_in_seat=1,
-                headless=True,
+                headless=False,
             )
             sid = res["session_id"]
             print(res["flights"])
