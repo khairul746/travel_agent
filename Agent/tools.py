@@ -9,7 +9,7 @@ from Utils.schemas import FlightSearchInput, GetFlightURLsInput, CloseSessionInp
 search_flights_tool = StructuredTool.from_function(
     coroutine=search_flights_tool_fn,
     name="search_flights",
-    description="Search one-way flights. Returns session_id + flight list. Do NOT close the browser.",
+    description="Search one-way flights. Use tool twice for round-trip flights.",
     args_schema=FlightSearchInput,
 )
 
