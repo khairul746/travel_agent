@@ -24,16 +24,36 @@ Back-end is Flask that drives Playwright in a background; front-end is a minimal
 
 ### Install & run
 
+Prioritize running with Docker (recommended). A local venv/dev workflow is provided as a fallback.
+
+Docker (recommended)
+
+For Windows (cmd.exe) — build and run the container:
+
+```bat
+:: 1) Build image
+docker build -t travel_agent:latest .
+
+:: 2) Run container (maps port 5000)
+docker run --rm -p 8000:8000 --shm-size=1g -e GROQ_API_KEY=YOUR_API_KEY travel-agent-image:latest
+
+:: then open http://localhost:5000
+```
+
+Local development (optional)
+
+If you prefer to run locally in a virtual environment (dev/testing):
+
 ```bash
 # 1) Create & activate venv (optional but recommended)
-python -m venv .venv
+uv venv
 # Windows
 .venv\Scripts\activate
 # macOS/Linux
 source .venv/bin/activate
 
 # 2) Install deps
-pip install -r requirements.txt
+uv sync
 
 # 3) Install Playwright browsers
 python -m playwright install chromium
@@ -41,7 +61,7 @@ python -m playwright install chromium
 # python -m playwright install --with-deps chromium
 
 # 4) Run the app
-python app.py
+uv run app.py
 # open http://localhost:5000
 ```
 
