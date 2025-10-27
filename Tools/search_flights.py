@@ -146,7 +146,7 @@ async def fill_origin(page: Page, origin: str):
         origin (str): The origin to fill in the input field.
     """
     try:
-        origin_input_selector = "input[aria-label='Where from?']"
+        origin_input_selector = "input[aria-label='Where from? ']"
         await wait_for_element_to_appear(page, origin_input_selector, timeout_ms=10000)
         
         origin_input_locator = page.locator(origin_input_selector)
