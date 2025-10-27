@@ -1,7 +1,7 @@
 [project]
 name = "travel-agent"
 version = "0.1.0"
-description = "Add your description here"
+description = "A small proof-of-concept “chat” app that searches flights and surfaces booking links directly from a conversational UI."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
