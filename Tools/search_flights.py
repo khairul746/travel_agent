@@ -8,8 +8,9 @@ from uuid import uuid4
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from Utils.session_manager import create_session, close_session, get_session, SESSIONS
 from Utils.schemas import FlightSearchInput, GetFlightURLsInput, SelectCurrencyInput, CloseSessionInput
+from Utils.logger import setup_logger
 
-
+logger = setup_logger(name="search_flights", log_level="INFO")
 # --- Helper Functions ---
 async def wait_for_element_to_appear(
     page: Page, selector: str, timeout_ms: int = 10000, check_interval_ms: int = 500
@@ -110,10 +111,10 @@ async def get_currency(page: Page) -> Optional[str]:
     try:
         await wait_for_element_to_appear(page, "span.VfPpkd-vQzf8d", timeout_ms=10000)
         currency = await page.locator("span.twocKe").nth(2).inner_text()
-        print(f"✅ Currency detected : {currency}.")
+        logger.info(f"Currency detected : {currency}.")
         return currency
     except Exception as e:
-        print(f"⚠️ Warning: Could not find price element on page: {e}")
+        logger.warning(f"Warning: Could not find price element on page: {e}")
         return None
     
 
@@ -134,10 +135,10 @@ async def select_flight_class(page: Page, flight_class: str = "Economy"):
         await wait_for_element_to_appear(page, "li[role='option']", timeout_ms=5000)
         await page.locator(f"li[role='option']:has-text('{flight_class}')").first.click()
         
-        print(f"✅ Flight class {flight_class} selected successfully.")
+        logger.info(f"Flight class {flight_class} selected successfully.")
     except Exception as e:
-        print(f"❌ Error selecting flight class: {e}")
-        raise
+        logger.exception(f"Error selecting flight class: {e}")
+        # raise
 
 
 async def fill_origin(page: Page, origin: str):
@@ -158,12 +159,12 @@ async def fill_origin(page: Page, origin: str):
         if await wait_for_element_to_appear(page, origin_selector, timeout_ms=5000):
             origin_option = page.locator(origin_selector) 
             await origin_option.first.click()
-            print(f"✅ Origin {origin} filled successfully.")
+            logger.info(f"Origin {origin} filled successfully.")
         else:
             raise ValueError(f"{origin} is not exist")
     except Exception as e:
-        print(f"❌ Error filling origin: {e}")
-        raise
+        logger.exception(f"Error filling origin: {e}")
+        # raise
 
 
 async def fill_destination(page: Page, destination: str):
@@ -185,12 +186,12 @@ async def fill_destination(page: Page, destination: str):
         if await wait_for_element_to_appear(page, destination_selector, timeout_ms=5000):
             destination_option = page.locator(destination_selector)
             await destination_option.first.click()
-            print(f"✅ Destination {destination} filled successfully.")
+            logger.info(f"Destination {destination} filled successfully.")
         else:
-            raise ValueError(f"❌ Error filling destination: {destination} is not exist")
+            raise ValueError(f"{destination} is not exist")
     except Exception as e:
-        print(f"❌ Error filling destination: {e}")
-        raise
+        logger.exception(f"Error filling destination: {e}")
+        # raise
 
 
 async def set_dates(page: Page, departure_date: str):
@@ -214,12 +215,12 @@ async def set_dates(page: Page, departure_date: str):
                 if element_handle:
                     await element_handle.evaluate("element => element.click()")
                 else:
-                    print("🚨 Date can not be set")
+                    logger.warning("Date can not be set")
                     return
                     # await departure_input.click()
                     # ...continue the process...
             else:
-                print("🚨 Date can not be set")
+                logger.warning("🚨 Date can not be set")
                 return
             
             await wait_for_element_to_appear(page, "div.WhDFk Io4vne") # wait for calendar to visible clearly
@@ -228,13 +229,13 @@ async def set_dates(page: Page, departure_date: str):
             await page.locator(departure_selector).nth(1).fill(departure_date)
             await page.keyboard.press("Enter")
             await page.keyboard.press("Enter")
-            print(f"✅ The date has been set successfully to {departure_date}.")
+            logger.info(f"The date has been set successfully to {departure_date}.")
 
         else:
-            print("🚨 Date can not be set")
+            logger.warning("Date can not be set")
     except Exception as e:
-        print(f"❌ Error setting departure or return date: {e}")
-        raise
+        logger.exception(f"Error setting departure or return date: {e}")
+        # raise
 
 
 async def set_number_of_passengers(
@@ -275,10 +276,10 @@ async def set_number_of_passengers(
         
         # Close the passenger menu by clicking the "Done" button
         await page.get_by_role("button", name="Done").click() # close the passenger menu
-        print("✅ Number of passengers set successfully. ")
+        logger.info("Number of passengers set successfully. ")
     except Exception as e:
-        print(f"❌ Error setting number of passengers: {e}")
-        raise
+        logger.exception(f"Error setting number of passengers: {e}")
+        # raise
     
 
 async def get_flights(page: Page, flight_class: str = "Economy", limiter: int = 10) -> Tuple[Dict[str, Any], str, Optional[str]]:
@@ -302,7 +303,7 @@ async def get_flights(page: Page, flight_class: str = "Economy", limiter: int = 
         search_results_selector = "button[aria-label='Search']"
         await wait_for_element_to_appear(page, search_results_selector, timeout_ms=15000)
         if not await page.locator(search_results_selector).is_visible():
-            print("🚨 No available flight for this search parameter")
+            logger.warning("No available flight for this search parameter")
             return flight_results, flight_class
         await page.locator(search_results_selector).click()
         await page.wait_for_timeout(5000)  # Wait for the search results to load
@@ -310,7 +311,7 @@ async def get_flights(page: Page, flight_class: str = "Economy", limiter: int = 
         # Handle searching progress if there are no result
         flight_class_used = flight_class
         if await page.locator("div[role='alert']:has-text('No results returned.')").is_visible():
-            print(f"😢 There are no flights for this class. Changing flight class to Economy...")
+            logger.warning(f"There are no flights for this class. Changing flight class to Economy...")
             await select_flight_class(page, flight_class="Economy")
             await page.wait_for_load_state("networkidle", timeout=30000)
             flight_class_used = "Economy"
@@ -321,17 +322,17 @@ async def get_flights(page: Page, flight_class: str = "Economy", limiter: int = 
         seen_details = set()
         for i, flight in enumerate(top_flights_locator):
             travel_detail = await flight.locator("div.JMc5Xc").first.get_attribute("aria-label")
-            # print(f"✈️ Flight {i+1}: {travel_detail}", end="\n\n")
+            # logger.(f"✈️ Flight {i+1}: {travel_detail}", end="\n\n")
             if travel_detail not in seen_details:
                 flight_results[f"Flight {i+1}"] = travel_detail
                 seen_details.add(travel_detail)
             if i+1 >= limiter:
                 break
             
-        print(f"✅ Found {len(flight_results)} flights.") if len(flight_results) > 0 else print("❌ No departing flight found")
+        logger.info(f"Found {len(flight_results)} flights.") if len(flight_results) > 0 else logger.error("No departing flight found")
         return (flight_results, flight_class_used, currency)
     except Exception as e:
-        print(f"❌ Error retrieving departing flight: {e}")
+        logger.error(f"Error retrieving departing flight: {e}")
         raise
     
         
@@ -346,7 +347,7 @@ def parse_flight_results(flight_results: Dict[str, Any], currency: Optional[str]
     """
     parsed_results = {}
     if flight_results is None:
-        print("❌ There is no flight to parse")
+        logger.warning("There is no flight to parse")
         return parsed_results
     
     for flight, details in flight_results.items():
@@ -408,7 +409,7 @@ def parse_flight_results(flight_results: Dict[str, Any], currency: Optional[str]
                     'layover_airport': lay.group(4)
                 })
             result['layovers'] = layovers if layovers else None
-            # print(f"✈️ {flight} has been parsed successfully")
+            # logger.(f"✈️ {flight} has been parsed successfully")
             parsed_results[flight] = result
 
             keys_allowed_to_be_none = ['layovers', 'airlines', 'flight_duration']
@@ -420,10 +421,10 @@ def parse_flight_results(flight_results: Dict[str, Any], currency: Optional[str]
                 parsed_results[flight] = {"Error": "Flight details are not valid: mandatory field is None."}
 
         except Exception as e:
-            # print(f"❌ Error parsing flight {flight}: {e}")
-            # print(f"Raw details: {details}", end="\n\n")
+            logger.error(f"Error parsing flight {flight}: {e}")
+            # logger.(f"Raw details: {details}", end="\n\n")
             # parsed_results[flight] = {"Error": str(e)}
-            raise
+            # raise
 
     return parsed_results
 
@@ -473,7 +474,7 @@ async def get_flight_urls(
         await flight_summary.scroll_into_view_if_needed()
         flight_card = flight_summary.locator("xpath=ancestor::li[contains(@class,'pIav2d')]").first
         await flight_card.click()
-        print("✅ Flight card clicked successfully.")
+        logger.info("Flight card clicked successfully.")
 
         # Case 1: No booking options
         if await page.locator(
@@ -482,14 +483,14 @@ async def get_flight_urls(
             booking_options.append({
                 "message": "We can’t find booking options for this itinerary. Try changing your flights to see booking options."
             })
-            print("🚨 No booking options found for this flight.")
+            logger.warning("No booking options found for this flight.")
             await page.go_back()
             return booking_options
 
         # Case 2: Page error
         if await page.locator("h1.YAGsO:has-text('Oops, something went wrong.')").is_visible():
             await page.locator("span.VfPpkd-vQzf8d:has-text('Reload')").click()
-            print("🔄 Page reloaded due to error.")
+            logger.info("Page reloaded due to error.")
 
         # Case 3: Booking options available
         await wait_for_element_to_appear(page, "div.gN1nAc")
@@ -510,15 +511,15 @@ async def get_flight_urls(
 
             if has_ctn:
                 booking_option["logo_url"] = await extract_logo_url(book)
-                print("✅ Logo URL extracted successfully.")
+                logger.info("Logo URL extracted successfully.")
                 booking_option["provider"] = await extract_booking_name(
                     book,
                     "//div[@class='ogfYpf AdWm1c' and contains(normalize-space(.), 'Book ') and contains(normalize-space(.), ' with')]",
                     r"Book\s+with\s+(.+)"
                 )
-                print("✅ Provider name extracted successfully.")
+                logger.info("Provider name extracted successfully.")
                 booking_option["price"] = await extract_price(book)
-                print("✅ Price extracted successfully.")
+                logger.info("Price extracted successfully.")
                 # Click and capture booking URL
                 btn = book.locator(ctn_selector).first
                 new_page = None
@@ -536,36 +537,36 @@ async def get_flight_urls(
                     await new_page.wait_for_load_state("load")
                     await asyncio.sleep(popup_wait_ms / 1000)
                     booking_option["booking_url"] = new_page.url
-                    print(f"✅ Booking URL extracted successfully")
+                    logger.info(f"Booking URL extracted successfully")
                     await new_page.close()
                 else:
                     await asyncio.sleep(popup_wait_ms / 1000)
                     booking_option["booking_url"] = page.url
                     await page.go_back()
-                    print("🔙 Returned to the main page after no popup appeared.")
+                    logger.info("Returned to the main page after no popup appeared.")
                     await wait_for_element_to_appear(page, "div.gN1nAc")
 
             else:
                 booking_option["logo_url"] = await extract_logo_url(book)
-                print("✅ Logo URL extracted successfully.") 
+                logger.info("Logo URL extracted successfully.") 
                 booking_option["provider"] = await extract_booking_name(
                     book,
                     "//div[@class='ogfYpf AdWm1c' and contains(normalize-space(.), 'Call ') and contains(normalize-space(.), ' to book')]",
                     r"Call\s+(.+)\s+to\s+book"
                 )
-                print("✅ Provider name extracted successfully.")
+                logger.info("Provider name extracted successfully.")
                 booking_option["price"] = await extract_price(book)
-                print("✅ Price extracted successfully.")
+                logger.info("Price extracted successfully.")
                 booking_option["call_number"] = await book.locator("div.bcmwcd").inner_text()
-                print("✅ Call number extracted successfully.")
+                logger.info("Call number extracted successfully.")
 
             booking_options.append(booking_option)
         await page.go_back()
-        print(f"✅ Extracted {len(booking_options)} booking options successfully.")
+        logger.info(f"Extracted {len(booking_options)} booking options successfully.")
     
     except Exception as e:
         booking_options = "Failed to fetch links."
-        print(e)
+        logger.error(e)
         return booking_options
     
     return booking_options
@@ -638,13 +639,13 @@ async def search_flights_tool_fn(
         if params.adults > 1 or params.children > 0 or params.infants_on_lap > 0 or params.infants_in_seat > 0:
             await set_number_of_passengers(page, params.adults, params.children, params.infants_on_lap, params.infants_in_seat)
         else:
-            print("✅ No additional passengers to set.")
+            logger.info("No additional passengers to set.")
 
         # Select flight class (only if different from default)
         if params.flight_class != "Economy":
             await select_flight_class(page, params.flight_class)
         else:
-            print("✅ Flight class is Economy, no selection needed.")
+            logger.info("Flight class is Economy, no selection needed.")
         
         await fill_origin(page, params.origin)
         await fill_destination(page, params.destination)
@@ -748,7 +749,7 @@ async def select_currency_tool_fn(session_id:str, currency: str) -> Optional[Dic
     page = sess.page
     old_currency = sess.data.get("currency", "unknown")
     if old_currency == currency:
-        print(f"✅ Currency is already set to {currency}, no change needed.")
+        logger.info(f"Currency is already set to {currency}, no change needed.")
         return
     try:
         # Click the currency dropdown trigger
@@ -761,7 +762,7 @@ async def select_currency_tool_fn(session_id:str, currency: str) -> Optional[Dic
         await page.locator(f"label:has-text('{currency}')").first.click()
         await page.locator("button:has-text('OK')").first.click()
         
-        print(f"✅ Currency {currency} selected successfully.")
+        logger.info(f"Currency {currency} selected successfully.")
 
         # Wait for the page to update prices
         flight_results = {}
@@ -787,12 +788,12 @@ async def select_currency_tool_fn(session_id:str, currency: str) -> Optional[Dic
                 "currency": currency,
             }
         else:
-            print("⚠️ There are no flights available after converting currencies.")
+            logger.warning("There are no flights available after converting currencies.")
 
 
     except Exception as e:
-        print(f"❌ Error selecting currency: {e}")
-        raise
+        logger.error(f"❌ Error selecting currency: {e}")
+        # raise
 
 
 async def close_session_tool_fn(session_id: str) -> Dict[str, Any]:
