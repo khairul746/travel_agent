@@ -73,7 +73,7 @@ body {
 
 .provider-line {
   display: grid;
-  grid-template-columns: 48px 3fr 1.5fr 48px;
+  grid-template-columns: 48px 96px 48px 48px;
   align-content:space-between;
   gap: 2vw;
 }
