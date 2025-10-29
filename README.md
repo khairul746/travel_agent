@@ -243,7 +243,6 @@ Closes a Playwright session and frees resources.
 - Caching & deduplication on flight results, better pagination.  
 - Provider integrations beyond scraped links (official APIs, if available).  
 - CI for Playwright tests with mock pages.  
-- Internationalization & currency normalization.
 
 ---
 
@@ -255,4 +254,4 @@ This demo uses browser automation. **Respect the target sites’ Terms of Servic
 
 ## Contribution
 
-Contributions are always welcome. If you’ve expanded one of the examples, found a mistake, or think something could be explained more clearly, please open a pull request. Improvements are greatly valued, and of course you are welcome to submit a pull request also.
+Contributions are always welcome. If you’ve expanded one of the examples, found a mistake, or think something could be explained more clearly, please open a pull request. Improvements are greatly valued.
