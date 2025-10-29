@@ -7,7 +7,7 @@ from uuid import uuid4
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from Utils.session_manager import create_session, close_session, get_session, SESSIONS
-from Utils.schemas import FlightSearchInput, GetFlightURLsInput, CloseSessionInput
+from Utils.schemas import FlightSearchInput, GetFlightURLsInput, SelectCurrencyInput, CloseSessionInput
 
 
 # --- Helper Functions ---
@@ -34,21 +34,7 @@ async def wait_for_element_to_appear(
                 return True
         await asyncio.sleep(check_interval_ms / 1000)
     return False
-
-
-def clean_price_string(price_str: str) -> Optional[int]:
-    """
-    Cleans a price string (e.g., 'Rp41,724,888') and converts it to an integer.
-    Removes 'Rp' prefix and commas.
-    """
-    # Remove 'Rp' and all commas
-    cleaned_price = re.sub(r'[Rp,.]', '', price_str)
-    try:
-        return int(cleaned_price)
-    except ValueError:
-        print(f"Warning: Could not convert price '{price_str}' to integer.")
-        return float('inf') # Return infinity for prices that cannot be parsed
-
+        
 
 def convert_duration_to_minutes(duration_str: str) -> int:
     """
@@ -116,6 +102,21 @@ def parse_dates(input_dates: str, default_year: int = None):
 
 
 # --- Interaction Functions ---
+async def get_currency(page: Page) -> Optional[str]:
+    """
+    Extracts the currency symbol from the page.
+    """
+    # Get default price
+    try:
+        await wait_for_element_to_appear(page, "span.VfPpkd-vQzf8d", timeout_ms=10000)
+        currency = await page.locator("span.twocKe").nth(2).inner_text()
+        print(f"✅ Currency detected : {currency}.")
+        return currency
+    except Exception as e:
+        print(f"⚠️ Warning: Could not find price element on page: {e}")
+        return None
+    
+
 async def select_flight_class(page: Page, flight_class: str = "Economy"):
     """ Selects the flight class from the dropdown menu.
     Args:
@@ -146,7 +147,7 @@ async def fill_origin(page: Page, origin: str):
         origin (str): The origin to fill in the input field.
     """
     try:
-        origin_input_selector = "input[aria-label='Where from? ']"
+        origin_input_selector = "input[aria-label^='Where from?']" 
         await wait_for_element_to_appear(page, origin_input_selector, timeout_ms=10000)
         
         origin_input_locator = page.locator(origin_input_selector)
@@ -280,16 +281,23 @@ async def set_number_of_passengers(
         raise
     
 
-async def get_flights(page: Page, flight_class: str = "Economy") -> Tuple[Dict[str, Any], str]:
+async def get_flights(page: Page, flight_class: str = "Economy", limiter: int = 10) -> Tuple[Dict[str, Any], str, Optional[str]]:
     """ Retrieves flight results from the page.
     Args:
         page (Page): The Playwright page instance.
+        flight_class (str): The flight class used in the search.
+        limiter (int): Maximum number of flight results to retrieve.
     Returns:
-        Dict[str, Any]: A dictionary containing flight results.
+        Tuple[Dict[str, Any], str, str]: A tuple containing flight results, flight class and currency.
     """
+    global  global_limiter
+    global_limiter = limiter
     flight_results = {}
 
     try:
+        # Ensure currency is set
+        currency = await get_currency(page)
+
         # Click the search button to initiate the flight search
         search_results_selector = "button[aria-label='Search']"
         await wait_for_element_to_appear(page, search_results_selector, timeout_ms=15000)
@@ -310,7 +318,6 @@ async def get_flights(page: Page, flight_class: str = "Economy") -> Tuple[Dict[s
         # Wait for the flight results to appear
         top_flights_locator = await page.locator("li.pIav2d").all()
         
-        limiter = 10  # Limit to the first 10 results for performance
         seen_details = set()
         for i, flight in enumerate(top_flights_locator):
             travel_detail = await flight.locator("div.JMc5Xc").first.get_attribute("aria-label")
@@ -322,17 +329,18 @@ async def get_flights(page: Page, flight_class: str = "Economy") -> Tuple[Dict[s
                 break
             
         print(f"✅ Found {len(flight_results)} flights.") if len(flight_results) > 0 else print("❌ No departing flight found")
-        return flight_results, flight_class_used
+        return (flight_results, flight_class_used, currency)
     except Exception as e:
         print(f"❌ Error retrieving departing flight: {e}")
         raise
     
         
 # --- Parsing Functions ---
-def parse_flight_results(flight_results: Dict[str, Any]) -> Dict[str, Any]:
+def parse_flight_results(flight_results: Dict[str, Any], currency: Optional[str] = None) -> Dict[str, Any]:
     """ Parses flight results into a more structured format.
     Args:
         flight_results (Dict[str, Any]): Raw flight results dictionary.
+        currency (Optional[str]): The currency symbol used in the prices (optional).
     Returns:
         Dict[str, Any]: Parsed flight results dictionary.
     """
@@ -349,7 +357,8 @@ def parse_flight_results(flight_results: Dict[str, Any]) -> Dict[str, Any]:
             # price extraction
             price_m = re.search(r"From (\d+)", text)
             if price_m:
-                price = f"Rp{int(price_m.group(1)):,}"
+                prefix = f"{currency} " if currency else ""
+                price = f"{prefix}{int(price_m.group(1)):,}"
                 result["price"] = price
 
             # number of stops extraction and airline extraction
@@ -561,7 +570,7 @@ async def get_flight_urls(
     
     return booking_options
 
-# ---------- Tool-ready functions (tinggal di-import di tools.py) ----------
+# ---------- Tool-ready functions ----------
 BASE_URL = "https://www.google.com/travel/flights"
 
 async def search_flights_tool_fn(
@@ -613,7 +622,7 @@ async def search_flights_tool_fn(
         sess = get_session(sid)
         page = sess.page
 
-        # Buka halaman awal (pakai halaman session; kita TIDAK pakai fetch_page agar tidak double-launch)
+        # Open Google Flights
         await page.goto(BASE_URL)
 
         # Click the dropdown trigger for flight type
@@ -643,8 +652,8 @@ async def search_flights_tool_fn(
         await set_dates(page, params.departure_date)
 
         # Get departing flights
-        departing_res, flight_class_used = await get_flights(page)
-        parsed_flights = parse_flight_results(departing_res)
+        departing_res, flight_class_used, currency = await get_flights(page)
+        parsed_flights = parse_flight_results(departing_res, currency)
 
         if not parsed_flights:
             await close_session(sid)
@@ -652,17 +661,19 @@ async def search_flights_tool_fn(
                 "session_id": None, 
                 "flights": None, 
                 "flight_class_used": None,
+                "currency": None,
                 "message": "No flights found for the given criteria."
             }
 
+        sess.data["currency"] = currency
         # store RAW in session so get_flight_urls_tool can be used without large payload
         sess.data["raw_flights"] = departing_res
 
-        
         return {
             "session_id": sid,
             "flights": parsed_flights,
             "flight_class_used": flight_class_used,
+            "currency": currency,
         }
         
     except Exception:
@@ -720,6 +731,70 @@ async def get_flight_urls_tool_fn(session_id: str,
     )
     
 
+async def select_currency_tool_fn(session_id:str, currency: str) -> Optional[Dict[str, Any]]:
+    """ Selects the desired currency from the currency dropdown menu.
+    Args:
+        session_id (str): The id of the session to use.
+        currency (str): The currency code to select (e.g., "USD", "EUR").
+    Returns:
+        Optional[Dict[str, Any]]: A dictionary containing:
+            flight results (Dict[str, Any]): Flights search results containing price, airline, number of stops, etc.
+    """
+    params = SelectCurrencyInput(
+        session_id=session_id,
+        currency=currency,
+    )
+    sess = get_session(params.session_id)
+    page = sess.page
+    old_currency = sess.data.get("currency", "unknown")
+    if old_currency == currency:
+        print(f"✅ Currency is already set to {currency}, no change needed.")
+        return
+    try:
+        # Click the currency dropdown trigger
+        currency_locator = "button:has-text('Currency')"
+        await wait_for_element_to_appear(page, currency_locator, timeout_ms=10000)
+        await page.locator(currency_locator).click()
+
+        # Wait for the options to appear and select the desired currency
+        await wait_for_element_to_appear(page, "h1:has-text('Select your currency')", timeout_ms=5000)
+        await page.locator(f"label:has-text('{currency}')").first.click()
+        await page.locator("button:has-text('OK')").first.click()
+        
+        print(f"✅ Currency {currency} selected successfully.")
+
+        # Wait for the page to update prices
+        flight_results = {}
+        top_flights_locator = page.locator("li.pIav2d")
+        if await wait_for_element_to_appear(page, "li.pIav2d", timeout_ms=3000):
+            seen_details = set()
+            for i, flight in enumerate(await top_flights_locator.all()):
+                travel_detail = await flight.locator("div.JMc5Xc").first.get_attribute("aria-label")
+                if travel_detail not in seen_details:
+                    flight_results[f"Flight {i+1}"] = travel_detail
+                    seen_details.add(travel_detail)
+                if i+1 >= global_limiter:
+                    break
+            
+            sess.data["raw_flights"] = flight_results
+            sess.data["currency"] = currency
+            flight_class_used = sess.data.get("flight_class_used", "Economy")
+            parsed_flights = parse_flight_results(flight_results, currency)
+            return {
+                "session_id": session_id,
+                "flights": parsed_flights,
+                "flight_class_used": flight_class_used,
+                "currency": currency,
+            }
+        else:
+            print("⚠️ There are no flights available after converting currencies.")
+
+
+    except Exception as e:
+        print(f"❌ Error selecting currency: {e}")
+        raise
+
+
 async def close_session_tool_fn(session_id: str) -> Dict[str, Any]:
     """
     Close and dispose a previously created Playwright session.
@@ -743,7 +818,7 @@ if __name__ == "__main__":
             res = await search_flights_tool_fn(
                 origin="Seoul",
                 destination="Bangkok",
-                departure_date="October 31",
+                departure_date="December 11",
                 flight_class="Economy",
                 adults=2,
                 children=1,
@@ -753,6 +828,13 @@ if __name__ == "__main__":
             )
             sid = res["session_id"]
             print(res["flights"])
+
+            currency = input("Enter currency code to change (e.g., USD, EUR): ")
+            print(await select_currency_tool_fn(
+                session_id=sid,
+                currency=currency,
+            ))
+
             flight_no = input("Enter flight number to get booking URLs (1-based index): ")
             print(await get_flight_urls_tool_fn(
                 session_id=sid,

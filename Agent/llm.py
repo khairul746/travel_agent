@@ -11,7 +11,7 @@ from pathlib import Path
 from uuid import UUID
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from Agent.tools import search_flights_tool, get_flight_urls_tool, close_session_tool
+from Agent.tools import search_flights_tool, get_flight_urls_tool, select_currency_tool, close_session_tool
 
 # Load environment variables
 load_dotenv()
@@ -19,7 +19,7 @@ os.environ["GROQ_API_KEY"] = os.getenv("GROQ_API_KEY")
 
 # Language Model and tools
 llm = ChatGroq(model="meta-llama/llama-4-maverick-17b-128e-instruct", temperature=0.3)
-tools = [search_flights_tool, get_flight_urls_tool, close_session_tool]
+tools = [search_flights_tool, get_flight_urls_tool, select_currency_tool, close_session_tool]
 
 class ToolEventCollector(BaseCallbackHandler):
     """
@@ -101,7 +101,7 @@ memory = InMemorySaver()
 
 SYSTEM_PROMPT = """You are a helpful TRAVEL PLANNER.
 When a tool returns a Tool Message, DO NOT RETRIEVE them in AIMessage.
-DO NOT call get_flight_urlr_tool before the user decide.
+DO NOT call get_flight_urls_tool before the user decide.
 And If a session_id is returned, keep it for follow-up tool calls but don't show it in the message content.
 
 As a travel planner, You can provide a wide range of suggestions and information to enhance 

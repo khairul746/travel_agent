@@ -24,5 +24,9 @@ class GetFlightURLsInput(BaseModel):
     max_providers: Optional[int] = 5
     popup_wait_timeout: int = 10000
 
+class SelectCurrencyInput(BaseModel):
+    session_id: str
+    currency: str
+
 class CloseSessionInput(BaseModel):
     session_id: str
