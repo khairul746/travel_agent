@@ -35,7 +35,7 @@ For Windows (cmd.exe) — build and run the container:
 docker build -t travel_agent:latest .
 
 :: 2) Run container (maps port 5000)
-docker run --rm -p 8000:8000 --shm-size=1g -e GROQ_API_KEY=YOUR_API_KEY travel-agent-image:latest
+docker run --rm -p 8000:8000 --shm-size=1g -e GROQ_API_KEY=YOUR_API_KEY travel-agent:latest
 
 :: then open http://localhost:5000
 ```
@@ -104,7 +104,8 @@ Invokes the agent with the user message and a conversation `thread_id`.
       "Flight 1": { "price": "Rp722,600", "airlines": ["Citilink Indonesia"], "departure_time": "6:20 AM", "...": "..." },
       "Flight 2": { "...": "..." }
     },
-    "flight_class_used": "Economy"
+    "flight_class_used": "Economy",
+    "currency": "IDR"
   },
   "thread_id": "t_ce4e…"
 }
@@ -132,7 +133,9 @@ Runs flight search (usually called by the agent/tooling; you can call it directl
 ```json
 {
   "session_id": "2ecb52d1-26ce-42a2-8cff-bbcd58d56829",
-  "flights": { "Flight 1": { "...": "..." }, "Flight 2": { "...": "..." } }
+  "flights": { "Flight 1": { "...": "..." }, "Flight 2": { "...": "..." } },
+  "flight_class_used": "Economy",
+  "currency": "IDR"
 }
 ```
 
@@ -163,6 +166,8 @@ Returns booking/provider links for the selected flight.
 ]
 ```
 > Returns `{ "error": "…" }` with HTTP 400 if validation fails (e.g., missing `session_id`).
+
+Note: some providers return a `call_number` instead of `booking_url` when the option requires a phone booking.
 
 ---
 
