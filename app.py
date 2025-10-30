@@ -8,6 +8,9 @@ from uuid import uuid4
 from werkzeug.exceptions import BadRequest
 from Tools.search_flights import search_flights_tool_fn, get_flight_urls_tool_fn, close_session_tool_fn
 from Utils.session_manager import close_all_sessions_sync
+from Utils.logger import setup_logger
+
+logger = setup_logger(name="app_chat")
 
 app = Flask(__name__)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
@@ -98,9 +101,11 @@ def chat():
     Returns:
       flask.Response: JSON response with reply/artifacts/thread_id, or a JSON error (500) on failure.
     """
+    
     body = request.get_json(force=True) or {}
     user_input = body.get("message", "")
-    
+    logger.info(f"User message : {user_input}")
+
     base_thread_id = body.get("thread_id") or request.remote_addr or "default"
     used_thread_id = base_thread_id
     
@@ -113,6 +118,7 @@ def chat():
     try:
         # Attempt 1
         resp = _invoke(used_thread_id)
+        logger.info(f"Agent reply : {resp['messages'][-1].content}")
     except Exception as e1:
         # Delete only created event during attempt 1
         if len(collector.events) > start_idx:
@@ -122,8 +128,10 @@ def chat():
 
         try:
             resp = _invoke(used_thread_id)
+            logger.info(f"Agent reply after retry: {resp['messages'][-1].content}")
         except Exception as e2:
             # Delete attempt 2 event (if there are)
+            logger.error(f"Agent invocation failed after retries: {e2}", exc_info=True)
             if len(collector.events) > start_idx:
                 del collector.events[start_idx:]
             return jsonify({

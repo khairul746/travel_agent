@@ -17,6 +17,7 @@ class FlightSearchInput(BaseModel):
     infants_on_lap: int = Field(0, ge=0)
     infants_in_seat: int = Field(0, ge=0)
     headless: bool = True
+    session_id: str = Field(default=None)
 
 class GetFlightURLsInput(BaseModel):
     session_id: str

@@ -584,6 +584,7 @@ async def search_flights_tool_fn(
     infants_on_lap: int = 0,
     infants_in_seat: int = 0,
     headless: bool = True,
+    session_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     1) Create a new Playwright session (unclosed)
@@ -608,6 +609,7 @@ async def search_flights_tool_fn(
             message (str): Status text (e.g., "Found N flights. Pick one by index (1..N).").
     """
     params = FlightSearchInput(
+        session_id=session_id,
         origin=origin,
         destination=destination,
         departure_date=departure_date,
@@ -618,7 +620,9 @@ async def search_flights_tool_fn(
         infants_in_seat=infants_in_seat,
         headless=headless,
     )
-    sid = await create_session(headless=params.headless)
+    
+    sid = await create_session(headless=params.headless) if params.session_id is None else params.session_id
+
     try:
         sess = get_session(sid)
         page = sess.page
@@ -745,7 +749,8 @@ async def select_currency_tool_fn(session_id:str, currency: str) -> Optional[Dic
         session_id=session_id,
         currency=currency,
     )
-    sess = get_session(params.session_id)
+    sid = await create_session() if params.session_id is None else params.session_id
+    sess = get_session(sid)
     page = sess.page
     old_currency = sess.data.get("currency", "unknown")
     if old_currency == currency:
@@ -767,6 +772,7 @@ async def select_currency_tool_fn(session_id:str, currency: str) -> Optional[Dic
         # Wait for the page to update prices
         flight_results = {}
         top_flights_locator = page.locator("li.pIav2d")
+        logger.info("Waiting for flight results to refresh with new currency...")
         if await wait_for_element_to_appear(page, "li.pIav2d", timeout_ms=3000):
             seen_details = set()
             for i, flight in enumerate(await top_flights_locator.all()):
@@ -781,6 +787,8 @@ async def select_currency_tool_fn(session_id:str, currency: str) -> Optional[Dic
             sess.data["currency"] = currency
             flight_class_used = sess.data.get("flight_class_used", "Economy")
             parsed_flights = parse_flight_results(flight_results, currency)
+            logger.info("Flight results has been recovered to fit preferred currency")
+
             return {
                 "session_id": session_id,
                 "flights": parsed_flights,
@@ -789,10 +797,15 @@ async def select_currency_tool_fn(session_id:str, currency: str) -> Optional[Dic
             }
         else:
             logger.warning("There are no flights available after converting currencies.")
-
+            return {
+                "session_id": session_id,
+                "flights": None,
+                "flight_class_used": None,
+                "currency": currency,
+            }
 
     except Exception as e:
-        logger.error(f"❌ Error selecting currency: {e}")
+        logger.exception(f"Error selecting currency: {e}")
         # raise
 
 
