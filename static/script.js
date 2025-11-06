@@ -435,9 +435,6 @@ function handleKeyDown(event) {
 window.sendMessage = sendMessage;
 window.handleKeyDown = handleKeyDown;
 
-// rehydrate UI on load
-document.addEventListener("DOMContentLoaded", rehydrateUI);
-
 // reset chat thread
 function resetChatThread() {
   const newId = genThreadId();
@@ -452,3 +449,102 @@ function resetChat() {
   location.reload();
 }
 window.resetChat = resetChat;
+
+// rehydrate UI on load
+document.addEventListener("DOMContentLoaded", rehydrateUI);
+
+
+// ==== currency handlers ====
+// fetch currencies data
+fetch('static/currencies.json')
+  .then(response => response.json())
+  .then(currency => {
+    const currencyList = document.getElementById("currencyList");
+    for(const c of currency){
+      const label = document.createElement("label");
+      label.className = "item";
+      label.dataset.name = `${c.name}`;
+      label.dataset.code = `${c.code}`;
+      label.innerHTML = `
+        <input type="radio" name="currency" value="${c.code}">
+        <span class="radio"><span class="dot"></span></span>
+        <span class="labels"><span>${c.name}</span><span class="code">${c.code}</span></span>`;
+      currencyList.appendChild(label);
+    }
+  })
+  
+// cancel select a currency
+const cancelSelect = () => {
+  document.querySelectorAll("input[type='radio']").forEach(
+    radio => radio.checked = false
+  );
+}
+
+// select currency on/off switch
+const currencyDialog = document.getElementById('currencyDialog');
+const currencyWrapper = document.querySelector('.currency-dialog');
+
+const showCurrencyDialog = (show) => show ? currencyDialog.showModal() : (cancelSelect() , currencyDialog.close());
+currencyDialog.addEventListener('click', (e) => {
+  !currencyWrapper.contains(e.target) && currencyDialog.close();
+});
+
+// --- Search / filter currency-list ---
+const searchInput = document.querySelector('.currency-search [data-role="search"]');
+const listEl = document.getElementById('currencyList');
+
+// Normalize input text
+const normalize = (s) =>
+  (s || '')
+    .toString()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, ''); // remove diacritics
+
+const filterCurrencies = (q) => {
+  const query = normalize(q.trim());
+  const items = listEl.querySelectorAll('.item');
+
+  // if blank, show all currencies
+  if (!query) {
+    items.forEach(el => { el.style.display = ''; });
+    return;
+  }
+
+  items.forEach(el => {
+    const name = normalize(el.dataset.name);
+    const code = normalize(el.dataset.code);
+    // match code or name
+    const match = code.includes(query) || name.includes(query);
+    el.style.display = match ? '' : 'none';
+  });
+};
+
+// Real-time filter upon user typing
+searchInput.addEventListener('input', (e) => filterCurrencies(e.target.value));
+
+// Clear filter upon user close the dialog
+currencyDialog.addEventListener('close', () => {
+  searchInput.value = '';
+  filterCurrencies('');
+});
+
+function setCurrency() {
+  const selected = listEl.querySelector("input[type='radio']:checked");
+
+  if (!selected) {
+    alert("Please select a currency first!");
+    return;
+  }
+
+  const item = selected.closest(".item");
+  const selectBtn = document.querySelector(".select-currency");
+  const dot = selectBtn.querySelector(".selected-dot");
+  const code = selectBtn.querySelector(".selected-currency");
+
+  dot.classList.remove("hidden");
+  code.classList.remove("hidden");
+  code.textContent = item.dataset.code;
+
+  currencyDialog.close();
+}
