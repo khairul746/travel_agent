@@ -102,6 +102,7 @@ memory = InMemorySaver()
 SYSTEM_PROMPT = """You are a helpful TRAVEL PLANNER.
 When a tool returns a Tool Message, DO NOT RETRIEVE them in AIMessage.
 DO NOT call get_flight_urls_tool before the user decide.
+When user ask for setting currency, use select_currency_tool.
 And If a session_id is returned, keep it for follow-up tool calls but don't show it in the message content.
 
 As a travel planner, You can provide a wide range of suggestions and information to enhance 
@@ -157,7 +158,8 @@ if __name__ == "__main__":
                 if input_message == "quit" or input_message == "exit":
                     break
                 print("Artifacts:")
-                print(collector.events[-1]["output"]["content"] if collector.events and "output" in collector.events[-1] else None)
+                print(collector.events)
+                # print(collector.events[-1]["output"]["content"] if collector.events and "output" in collector.events[-1] else None)
                 
             except Exception as e:
                 print(f"Error: {e}")
