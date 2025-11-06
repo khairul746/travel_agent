@@ -451,6 +451,7 @@ async def extract_booking_name(root, xpath: str, pattern: str) -> str:
     match = re.findall(pattern, booking_name)
     return match[0].strip() if match else None
 
+flight_url_logger = setup_logger(name="get_flight_urls", log_level="INFO")
 async def get_flight_urls(
     page: Page, 
     flight_results: Dict[str, Any], 
@@ -474,7 +475,7 @@ async def get_flight_urls(
         await flight_summary.scroll_into_view_if_needed()
         flight_card = flight_summary.locator("xpath=ancestor::li[contains(@class,'pIav2d')]").first
         await flight_card.click()
-        logger.info("Flight card clicked successfully.")
+        flight_url_logger.info("Flight card clicked successfully.")
 
         # Case 1: No booking options
         if await page.locator(
@@ -483,14 +484,14 @@ async def get_flight_urls(
             booking_options.append({
                 "message": "We can’t find booking options for this itinerary. Try changing your flights to see booking options."
             })
-            logger.warning("No booking options found for this flight.")
+            flight_url_logger.warning("No booking options found for this flight.")
             await page.go_back()
             return booking_options
 
         # Case 2: Page error
         if await page.locator("h1.YAGsO:has-text('Oops, something went wrong.')").is_visible():
             await page.locator("span.VfPpkd-vQzf8d:has-text('Reload')").click()
-            logger.info("Page reloaded due to error.")
+            flight_url_logger.info("Page reloaded due to error.")
 
         # Case 3: Booking options available
         await wait_for_element_to_appear(page, "div.gN1nAc")
@@ -511,15 +512,15 @@ async def get_flight_urls(
 
             if has_ctn:
                 booking_option["logo_url"] = await extract_logo_url(book)
-                logger.info("Logo URL extracted successfully.")
+                flight_url_logger.info("Logo URL extracted successfully.")
                 booking_option["provider"] = await extract_booking_name(
                     book,
                     "//div[@class='ogfYpf AdWm1c' and contains(normalize-space(.), 'Book ') and contains(normalize-space(.), ' with')]",
                     r"Book\s+with\s+(.+)"
                 )
-                logger.info("Provider name extracted successfully.")
+                flight_url_logger.info("Provider name extracted successfully.")
                 booking_option["price"] = await extract_price(book)
-                logger.info("Price extracted successfully.")
+                flight_url_logger.info("Price extracted successfully.")
                 # Click and capture booking URL
                 btn = book.locator(ctn_selector).first
                 new_page = None
@@ -537,36 +538,36 @@ async def get_flight_urls(
                     await new_page.wait_for_load_state("load")
                     await asyncio.sleep(popup_wait_ms / 1000)
                     booking_option["booking_url"] = new_page.url
-                    logger.info(f"Booking URL extracted successfully")
+                    flight_url_logger.info(f"Booking URL extracted successfully")
                     await new_page.close()
                 else:
                     await asyncio.sleep(popup_wait_ms / 1000)
                     booking_option["booking_url"] = page.url
                     await page.go_back()
-                    logger.info("Returned to the main page after no popup appeared.")
+                    flight_url_logger.info("Returned to the main page after no popup appeared.")
                     await wait_for_element_to_appear(page, "div.gN1nAc")
 
             else:
                 booking_option["logo_url"] = await extract_logo_url(book)
-                logger.info("Logo URL extracted successfully.") 
+                flight_url_logger.info("Logo URL extracted successfully.") 
                 booking_option["provider"] = await extract_booking_name(
                     book,
                     "//div[@class='ogfYpf AdWm1c' and contains(normalize-space(.), 'Call ') and contains(normalize-space(.), ' to book')]",
                     r"Call\s+(.+)\s+to\s+book"
                 )
-                logger.info("Provider name extracted successfully.")
+                flight_url_logger.info("Provider name extracted successfully.")
                 booking_option["price"] = await extract_price(book)
-                logger.info("Price extracted successfully.")
+                flight_url_logger.info("Price extracted successfully.")
                 booking_option["call_number"] = await book.locator("div.bcmwcd").inner_text()
-                logger.info("Call number extracted successfully.")
+                flight_url_logger.info("Call number extracted successfully.")
 
             booking_options.append(booking_option)
         await page.go_back()
-        logger.info(f"Extracted {len(booking_options)} booking options successfully.")
+        flight_url_logger.info(f"Extracted {len(booking_options)} booking options successfully.")
     
     except Exception as e:
         booking_options = "Failed to fetch links."
-        logger.error(e)
+        flight_url_logger.error(e)
         return booking_options
     
     return booking_options
@@ -735,12 +736,12 @@ async def get_flight_urls_tool_fn(session_id: str,
         popup_wait_ms=params.popup_wait_timeout,
     )
     
-
-async def select_currency_tool_fn(session_id:str, currency: Optional[str] = None) -> Optional[Dict[str, Any]]:
+currency_logger = setup_logger(name="select_currency", log_level="INFO")
+async def select_currency_tool_fn(currency: str, session_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """ Selects the desired currency from the currency dropdown menu.
     Args:
-        session_id (str | None): The id of the session to use.
         currency (str): The currency code to select (e.g., "USD", "EUR").
+        session_id (str | None): The id of the session to use.
     Returns:
         Optional[Dict[str, Any]]: A dictionary containing:
             flight results (Dict[str, Any]): Flights search results containing price, airline, number of stops, etc.
@@ -760,13 +761,18 @@ async def select_currency_tool_fn(session_id:str, currency: Optional[str] = None
 
     old_currency = sess.data.get("currency", "unknown")
     if old_currency == currency:
-        logger.info(f"Currency is already set to {currency}, no change needed.")
-        return
+        currency_logger.info(f"Currency is already set to {currency}, no change needed.")
+        return {
+                "session_id": sid,
+                "flights": None,
+                "flight_class_used": None,
+                "currency": currency,
+            }
     try:
         # Click the currency dropdown trigger
         # currency_locator = "button:has-text('Currency')"
         currency_locator = "button[jsname='z2Jm1b']"
-        await wait_for_element_to_appear(page, currency_locator, timeout_ms=1000)
+        await wait_for_element_to_appear(page, currency_locator, timeout_ms=3000)
         await page.locator(currency_locator).click()
 
         # Wait for the options to appear and select the desired currency
@@ -774,12 +780,12 @@ async def select_currency_tool_fn(session_id:str, currency: Optional[str] = None
         await page.locator(f"label:has-text('{currency}')").first.click()
         await page.locator("button:has-text('OK')").first.click()
         
-        logger.info(f"Currency {currency} selected successfully.")
+        currency_logger.info(f"Currency {currency} selected successfully.")
 
         # Wait for the page to update prices
         flight_results = {}
         top_flights_locator = page.locator("li.pIav2d")
-        logger.info("Waiting for flight results to refresh with new currency...")
+        currency_logger.info("Waiting for flight results to refresh with new currency...")
         if await wait_for_element_to_appear(page, "li.pIav2d", timeout_ms=3000):
             seen_details = set()
             for i, flight in enumerate(await top_flights_locator.all()):
@@ -794,7 +800,7 @@ async def select_currency_tool_fn(session_id:str, currency: Optional[str] = None
             sess.data["currency"] = currency
             flight_class_used = sess.data.get("flight_class_used", "Economy")
             parsed_flights = parse_flight_results(flight_results, currency)
-            logger.info("Flight results has been recovered to fit preferred currency")
+            currency_logger.info("Flight results has been recovered to fit preferred currency")
 
             return {
                 "session_id": sid,
@@ -803,7 +809,7 @@ async def select_currency_tool_fn(session_id:str, currency: Optional[str] = None
                 "currency": currency,
             }
         else:
-            logger.warning("There are no flights available after converting currencies.")
+            currency_logger.warning("There are no flights available after converting currencies.")
             return {
                 "session_id": sid,
                 "flights": None,
@@ -812,7 +818,7 @@ async def select_currency_tool_fn(session_id:str, currency: Optional[str] = None
             }
 
     except Exception as e:
-        logger.exception(f"Error selecting currency: {e}")
+        currency_logger.exception(f"Error selecting currency: {e}")
         # raise
 
 
@@ -833,20 +839,13 @@ async def close_session_tool_fn(session_id: str) -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-    async def currency_demo():
-        res = await select_currency_tool_fn(
-            session_id=None,
-            currency="USD",
-        )
-
-        print(res)
-        sid = res["session_id"]
-
-        await close_session_tool_fn(session_id=sid)
-
     async def _demo():
         sid = None
         try:
+            res = await select_currency_tool_fn(currency="USD")
+
+            sid = res["session_id"]
+
             res = await search_flights_tool_fn(
                 origin="Seoul",
                 destination="Bangkok",
@@ -856,10 +855,10 @@ if __name__ == "__main__":
                 children=1,
                 infants_on_lap=1,
                 infants_in_seat=1,
-                headless=False,
-                session_id=None,
+                headless=True,
+                session_id=sid,
             )
-            sid = res["session_id"]
+            
             print(res["flights"])
 
             currency = input("Enter currency code to change (e.g., USD, EUR): ")
@@ -879,4 +878,4 @@ if __name__ == "__main__":
             if sid:
                 await close_session_tool_fn(session_id=sid)
 
-    asyncio.run(currency_demo())
+    asyncio.run(_demo())
