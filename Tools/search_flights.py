@@ -587,7 +587,7 @@ async def search_flights_tool_fn(
     session_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    1) Create a new Playwright session (unclosed)
+    1) Create a new Playwright session (unclosed) or reuse an existing one
     2) Run a ONE-WAY search flow
     3) Save the raw_flights in the session so that subsequent tools can use them
     4) Return the session_id + a summary list of flights (for the user to select)
@@ -609,7 +609,6 @@ async def search_flights_tool_fn(
             message (str): Status text (e.g., "Found N flights. Pick one by index (1..N).").
     """
     params = FlightSearchInput(
-        session_id=session_id,
         origin=origin,
         destination=destination,
         departure_date=departure_date,
@@ -619,6 +618,7 @@ async def search_flights_tool_fn(
         infants_on_lap=infants_on_lap,
         infants_in_seat=infants_in_seat,
         headless=headless,
+        session_id=session_id,
     )
     
     sid = await create_session(headless=params.headless) if params.session_id is None else params.session_id
@@ -736,10 +736,10 @@ async def get_flight_urls_tool_fn(session_id: str,
     )
     
 
-async def select_currency_tool_fn(session_id:str, currency: str) -> Optional[Dict[str, Any]]:
+async def select_currency_tool_fn(session_id:str, currency: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """ Selects the desired currency from the currency dropdown menu.
     Args:
-        session_id (str): The id of the session to use.
+        session_id (str | None): The id of the session to use.
         currency (str): The currency code to select (e.g., "USD", "EUR").
     Returns:
         Optional[Dict[str, Any]]: A dictionary containing:
@@ -749,17 +749,24 @@ async def select_currency_tool_fn(session_id:str, currency: str) -> Optional[Dic
         session_id=session_id,
         currency=currency,
     )
-    sid = await create_session() if params.session_id is None else params.session_id
+
+    if params.session_id is None:
+        sid = await create_session(headless=True)
+        await get_session(sid).page.goto(BASE_URL)
+    else: 
+        sid = params.session_id
     sess = get_session(sid)
     page = sess.page
+
     old_currency = sess.data.get("currency", "unknown")
     if old_currency == currency:
         logger.info(f"Currency is already set to {currency}, no change needed.")
         return
     try:
         # Click the currency dropdown trigger
-        currency_locator = "button:has-text('Currency')"
-        await wait_for_element_to_appear(page, currency_locator, timeout_ms=10000)
+        # currency_locator = "button:has-text('Currency')"
+        currency_locator = "button[jsname='z2Jm1b']"
+        await wait_for_element_to_appear(page, currency_locator, timeout_ms=1000)
         await page.locator(currency_locator).click()
 
         # Wait for the options to appear and select the desired currency
@@ -790,7 +797,7 @@ async def select_currency_tool_fn(session_id:str, currency: str) -> Optional[Dic
             logger.info("Flight results has been recovered to fit preferred currency")
 
             return {
-                "session_id": session_id,
+                "session_id": sid,
                 "flights": parsed_flights,
                 "flight_class_used": flight_class_used,
                 "currency": currency,
@@ -798,7 +805,7 @@ async def select_currency_tool_fn(session_id:str, currency: str) -> Optional[Dic
         else:
             logger.warning("There are no flights available after converting currencies.")
             return {
-                "session_id": session_id,
+                "session_id": sid,
                 "flights": None,
                 "flight_class_used": None,
                 "currency": currency,
@@ -826,6 +833,17 @@ async def close_session_tool_fn(session_id: str) -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
+    async def currency_demo():
+        res = await select_currency_tool_fn(
+            session_id=None,
+            currency="USD",
+        )
+
+        print(res)
+        sid = res["session_id"]
+
+        await close_session_tool_fn(session_id=sid)
+
     async def _demo():
         sid = None
         try:
@@ -839,6 +857,7 @@ if __name__ == "__main__":
                 infants_on_lap=1,
                 infants_in_seat=1,
                 headless=False,
+                session_id=None,
             )
             sid = res["session_id"]
             print(res["flights"])
@@ -860,4 +879,4 @@ if __name__ == "__main__":
             if sid:
                 await close_session_tool_fn(session_id=sid)
 
-    asyncio.run(_demo())
+    asyncio.run(currency_demo())
