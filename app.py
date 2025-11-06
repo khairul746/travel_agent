@@ -6,7 +6,7 @@ from threading import Thread
 from flask import Blueprint, request, jsonify
 from uuid import uuid4
 from werkzeug.exceptions import BadRequest
-from Tools.search_flights import search_flights_tool_fn, get_flight_urls_tool_fn, close_session_tool_fn
+from Tools.search_flights import search_flights_tool_fn, get_flight_urls_tool_fn, select_currency_tool_fn, close_session_tool_fn
 from Utils.session_manager import close_all_sessions_sync
 from Utils.logger import setup_logger
 
@@ -206,6 +206,30 @@ def get_flight_urls_ep():
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+    
+@api.post("/select-currency")
+def select_currency_ep():
+    """
+    Select currency on the flight search page.
+
+    Expects JSON body:
+      - session_id (str): Playwright session id (optional)
+      - currency (str): Currency to select (e.g., "USD") (required)
+
+    Returns:
+      flask.Response:   JSON list of converted currency of flight results,
+                        or new setting of currency if there are no rendered flight results on success, 
+                        or {"error": "..."} with HTTP 400 on failure.
+    """
+    payload = request.get_json(silent=True) or {}
+    currency = payload.get("currency_code") or payload.get("currency")
+    if not currency:
+        raise BadRequest("Missing required field: currency")
+    try:
+        result = run_coro(select_currency_tool_fn(**payload))
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 @api.post("/close-session")
 def close_session_ep():
@@ -229,4 +253,4 @@ def close_session_ep():
 app.register_blueprint(api)
 
 if __name__ == "__main__":
-    app.run(debug=False)
+    app.run(debug=True)
