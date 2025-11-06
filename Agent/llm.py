@@ -18,7 +18,12 @@ load_dotenv()
 os.environ["GROQ_API_KEY"] = os.getenv("GROQ_API_KEY")
 
 # Language Model and tools
-llm = ChatGroq(model="meta-llama/llama-4-maverick-17b-128e-instruct", temperature=0.3)
+chat_models = [
+    "meta-llama/llama-4-maverick-17b-128e-instruct",
+    "meta-llama/llama-4-scout-17b-16e-instruct"
+]
+
+llm = ChatGroq(model=chat_models[0], temperature=0.3)
 tools = [search_flights_tool, get_flight_urls_tool, select_currency_tool, close_session_tool]
 
 class ToolEventCollector(BaseCallbackHandler):
