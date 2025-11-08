@@ -622,15 +622,17 @@ async def search_flights_tool_fn(
         session_id=session_id,
     )
     
-    sid = await create_session(headless=params.headless) if params.session_id is None else params.session_id
-
-    try:
+    if params.session_id is None:
+        sid = await create_session(headless=params.headless)
+        sess = get_session(sid)
+        page = sess.page
+        await page.goto(BASE_URL) # Navigate to Google Flights main page
+    else:
+        sid =  params.session_id
         sess = get_session(sid)
         page = sess.page
 
-        # Open Google Flights
-        await page.goto(BASE_URL)
-
+    try:
         # Click the dropdown trigger for flight type
         await wait_for_element_to_appear(page, "div.VfPpkd-aPP78e", timeout_ms=10000)
         await page.locator("div.VfPpkd-aPP78e").first.click()
@@ -756,11 +758,13 @@ async def select_currency_tool_fn(currency: str, session_id: Optional[str] = Non
 
     if params.session_id is None:
         sid = await create_session(headless=True)
-        await get_session(sid).page.goto(BASE_URL)
-    else: 
-        sid = params.session_id
-    sess = get_session(sid)
-    page = sess.page
+        sess = get_session(sid)
+        page = sess.page
+        await page.goto(BASE_URL) # Navigate to Google Flights main page
+    else:
+        sid =  params.session_id
+        sess = get_session(sid)
+        page = sess.page
 
     old_currency = sess.data.get("currency", "unknown")
     if old_currency == currency:
