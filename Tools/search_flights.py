@@ -6,7 +6,7 @@ from datetime import datetime
 from uuid import uuid4
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from Utils.session_manager import create_session, close_session, get_session, SESSIONS
+from Utils.session_manager import create_session, close_session, get_session
 from Utils.schemas import FlightSearchInput, GetFlightURLsInput, SelectCurrencyInput, CloseSessionInput
 from Utils.logger import setup_logger
 
@@ -674,6 +674,9 @@ async def search_flights_tool_fn(
         sess.data["currency"] = currency
         # store RAW in session so get_flight_urls_tool can be used without large payload
         sess.data["raw_flights"] = departing_res
+        # store parsed flights too for reference and select_currency_tool
+        sess.data["parsed_flights"] = parsed_flights
+        sess.data["flight_class_used"] = flight_class_used
 
         return {
             "session_id": sid,
@@ -764,8 +767,8 @@ async def select_currency_tool_fn(currency: str, session_id: Optional[str] = Non
         currency_logger.info(f"Currency is already set to {currency}, no change needed.")
         return {
                 "session_id": sid,
-                "flights": None,
-                "flight_class_used": None,
+                "flights": sess.data.get("parsed_flights", None),
+                "flight_class_used": sess.data.get("flight_class_used", None),
                 "currency": currency,
             }
     try:
@@ -810,10 +813,11 @@ async def select_currency_tool_fn(currency: str, session_id: Optional[str] = Non
             }
         else:
             currency_logger.warning("There are no flights available after converting currencies.")
+            currency_logger.info("Reverting to previous flight results.")
             return {
                 "session_id": sid,
-                "flights": None,
-                "flight_class_used": None,
+                "flights": sess.data.get("parsed_flights", None),   
+                "flight_class_used": sess.data.get("flight_class_used", None),
                 "currency": currency,
             }
 
@@ -845,7 +849,7 @@ if __name__ == "__main__":
             res = await select_currency_tool_fn(currency="USD")
 
             sid = res["session_id"]
-
+            print(f"Session ID used by select_currency_tool: {sid}")
             res = await search_flights_tool_fn(
                 origin="Seoul",
                 destination="Bangkok",
@@ -859,6 +863,7 @@ if __name__ == "__main__":
                 session_id=sid,
             )
             
+            print(f"Session ID used by search_flights_tool: {res['session_id']}")
             print(res["flights"])
 
             currency = input("Enter currency code to change (e.g., USD, EUR): ")
