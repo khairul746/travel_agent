@@ -43,6 +43,16 @@ function rehydrateUI() {
     }
     catch (e) { console.warn("rehydrate artifacts/providers failed", e); }
   }
+
+  // Rehydrate selected currency on load
+  try {
+    const codeFromArtifacts = state.artifacts
+      ? getCurrencyFromPayload(state.artifacts) : null;
+    const code = codeFromArtifacts || state.currency || null;
+    if (code) renderSelectedCurrency(code);
+  } catch (err) {
+    console.warn("rehydrate currency failed", err)
+  }
 }
 
 function rehydrateProvidersFromState(state) {
@@ -119,6 +129,11 @@ function extractFlights(payload) {
     flightNo: Number.isFinite(n) ? n : (i + 1),
     flightKey: k, // keep original key for stable rehydrate/persist mapping
   }));
+}
+
+function getCurrencyFromPayload(artifactsOrPayload) {
+  const payload = extractPayload(artifactsOrPayload) || {};
+  return ( payload.currency || null )
 }
 
 // ---------- renderers ----------
@@ -199,6 +214,16 @@ function renderProviders(container, providers) {
   container.hidden = false;
 }
 
+function renderSelectedCurrency(currency) {
+  const selectBtn = document.querySelector(".select-currency");
+  if (!selectBtn) return;
+  const dot = selectBtn.querySelector(".selected-dot");
+  const code = selectBtn.querySelector(".selected-currency");
+  dot?.classList.remove("hidden");
+  code?.classList.remove("hidden");
+  if (code) code.textContent = currency || "";
+}
+
 // ---------- API calls ----------
 async function callChat(message) {
   const thread_id = getOrCreateThreadId();
@@ -224,6 +249,19 @@ async function callGetFlightUrls(payload) {
   const data = await res.json();
   console.log("[get-flight-urls]", data);
   return data;
+}
+
+async function callSelectCurrency({currency, session_id}) {
+  const res = await fetch("api/select-currency",{
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(
+      session_id ? { currency, session_id} : { currency }
+    ),
+  });
+  const data = await res.json();
+  console.log("[select-currency]", data);
+  return data
 }
 
 // ---------- handlers ----------
@@ -389,6 +427,14 @@ async function sendMessage() {
       if (stateNow && stateNow.artifacts === data.artifacts) rehydrateProvidersFromState(stateNow);
     }
 
+    // render selected currency
+    if (data.artifacts) {
+      currency = data.artifacts.currency;
+      renderSelectedCurrency(currency);
+      const st1 = loadState();
+      st1.currency = currency;
+    }
+
     // persist bot bubble and artifacts
     const st2 = loadState();
     st2.chat = st2.chat || [];
@@ -484,7 +530,7 @@ const cancelSelect = () => {
 const currencyDialog = document.getElementById('currencyDialog');
 const currencyWrapper = document.querySelector('.currency-dialog');
 
-const showCurrencyDialog = (show) => show ? currencyDialog.showModal() : (cancelSelect() , currencyDialog.close());
+window.showCurrencyDialog = (show) => show ? currencyDialog.showModal() : (cancelSelect() , currencyDialog.close());
 currencyDialog.addEventListener('click', (e) => {
   !currencyWrapper.contains(e.target) && currencyDialog.close();
 });
@@ -529,22 +575,59 @@ currencyDialog.addEventListener('close', () => {
   filterCurrencies('');
 });
 
-function setCurrency() {
+async function setCurrency() {
+  if (SENDING) return;
+  
   const selected = listEl.querySelector("input[type='radio']:checked");
-
   if (!selected) {
     alert("Please select a currency first!");
     return;
   }
 
   const item = selected.closest(".item");
-  const selectBtn = document.querySelector(".select-currency");
-  const dot = selectBtn.querySelector(".selected-dot");
-  const code = selectBtn.querySelector(".selected-currency");
+  const currency = item?.dataset?.code;
+  if (!currency) return;
 
-  dot.classList.remove("hidden");
-  code.classList.remove("hidden");
-  code.textContent = item.dataset.code;
+  // render selected currency
+  renderSelectedCurrency(currency);
 
-  currencyDialog.close();
+  SENDING = true;
+  setSendBtnLoading(SENDING);
+
+  // call API for changing currency in backend
+  try {
+    const payload = {currency}
+    if (CURRENT_SESSION_ID) payload.session_id = CURRENT_SESSION_ID;
+
+    result = await callSelectCurrency(payload);
+    if (result && result.session_id) {
+      CURRENT_SESSION_ID = result.session_id;
+    }
+
+    // return converted flight results if any
+    const maybeFlights = result?.flights || null;
+    console.log('Flights', maybeFlights)
+    if (maybeFlights) {
+      // persist rendered flights
+      const st = loadState();
+      st.artifacts = result;
+      saveState(st);
+      // render converted flights
+      renderFlightResults(st.artifacts);
+    }
+
+    // Persist selected currency
+    const st2 = loadState();
+    st2.currency = currency;
+    if (CURRENT_SESSION_ID && !st2.session_id) st2.session_id = CURRENT_SESSION_ID;
+    saveState(st2);
+  } catch (err) {
+    alert(err)
+    console.error("Select currency failed", err);
+  } finally { 
+    currencyDialog.close();
+    SENDING = false;
+    setSendBtnLoading(SENDING);
+    
+  }
 }
