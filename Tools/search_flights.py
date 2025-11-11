@@ -107,7 +107,6 @@ async def get_currency(page: Page) -> Optional[str]:
     """
     Extracts the currency symbol from the page.
     """
-    # Get default price
     try:
         await wait_for_element_to_appear(page, "span.VfPpkd-vQzf8d", timeout_ms=10000)
         currency = await page.locator("span.twocKe").nth(2).inner_text()
@@ -125,9 +124,7 @@ async def select_flight_class(page: Page, flight_class: str = "Economy"):
         flight_class (str): Class of flight to select ("Economy", "Premium economy", "Business", "First").
     """
     try:
-        # Click the dropdown trigger for flight class (assuming it's the second one)
-        # It's highly recommended to use a more specific selector if possible,
-        # e.g., using aria-label or a parent container.
+        # Click the dropdown trigger for flight class
         await wait_for_element_to_appear(page, "div.VfPpkd-aPP78e", timeout_ms=10000)
         await page.locator("div.VfPpkd-aPP78e").nth(1).click()
 
@@ -174,7 +171,6 @@ async def fill_destination(page: Page, destination: str):
         destination (str): The destination to fill in the input field.
     """
     try:
-        # Crucial: The space after 'Where to?' is important for the selector.
         destination_input_selector = "input[aria-label^='Where to?']"
         await wait_for_element_to_appear(page, destination_input_selector, timeout_ms=15000)
         
@@ -206,9 +202,6 @@ async def set_dates(page: Page, departure_date: str):
     try:
         departure_selector = "input[aria-label='Departure']"
         if await wait_for_element_to_appear(page, departure_selector):
-            # Ensure the initial departure input field is ready
-            # Click the departure input to open the date picker
-            # Note: .nth(0) usually targets the visible input field to open the calendar.
             departure_input = page.locator(departure_selector).nth(0)
             if await departure_input.is_visible() and await departure_input.is_enabled():
                 element_handle = await departure_input.element_handle()
@@ -217,15 +210,13 @@ async def set_dates(page: Page, departure_date: str):
                 else:
                     logger.warning("Date can not be set")
                     return
-                    # await departure_input.click()
-                    # ...continue the process...
+
             else:
                 logger.warning("🚨 Date can not be set")
                 return
             
             await wait_for_element_to_appear(page, "div.WhDFk Io4vne") # wait for calendar to visible clearly
 
-            # Assuming .nth(1) is the actual text input field within the date picker for departure
             await page.locator(departure_selector).nth(1).fill(departure_date)
             await page.keyboard.press("Enter")
             await page.keyboard.press("Enter")
@@ -265,16 +256,13 @@ async def set_number_of_passengers(
         await page.get_by_role("button", name="1 passenger").click()
         for passenger_type, count in passengers.items():
             if count > 0:
-                # Initialize current_count based on default UI state
                 current_count = 1 if passenger_type == "adult" else 0
 
-                # Click 'Add' button until target count is reached
                 while current_count < count:
                     add_button_selector = f"button[aria-label='Add {passenger_type}']"
                     await page.locator(add_button_selector).click()
                     current_count += 1
         
-        # Close the passenger menu by clicking the "Done" button
         await page.get_by_role("button", name="Done").click() # close the passenger menu
         logger.info("Number of passengers set successfully. ")
     except Exception as e:
@@ -322,7 +310,6 @@ async def get_flights(page: Page, flight_class: str = "Economy", limiter: int = 
         seen_details = set()
         for i, flight in enumerate(top_flights_locator):
             travel_detail = await flight.locator("div.JMc5Xc").first.get_attribute("aria-label")
-            # logger.(f"✈️ Flight {i+1}: {travel_detail}", end="\n\n")
             if travel_detail not in seen_details:
                 flight_results[f"Flight {i+1}"] = travel_detail
                 seen_details.add(travel_detail)
@@ -409,7 +396,6 @@ def parse_flight_results(flight_results: Dict[str, Any], currency: Optional[str]
                     'layover_airport': lay.group(4)
                 })
             result['layovers'] = layovers if layovers else None
-            # logger.(f"✈️ {flight} has been parsed successfully")
             parsed_results[flight] = result
 
             keys_allowed_to_be_none = ['layovers', 'airlines', 'flight_duration']
@@ -422,8 +408,6 @@ def parse_flight_results(flight_results: Dict[str, Any], currency: Optional[str]
 
         except Exception as e:
             logger.error(f"Error parsing flight {flight}: {e}")
-            # logger.(f"Raw details: {details}", end="\n\n")
-            # parsed_results[flight] = {"Error": str(e)}
             # raise
 
     return parsed_results
@@ -639,7 +623,7 @@ async def search_flights_tool_fn(
 
         # Wait for the options to appear and select the desired flight type
         await wait_for_element_to_appear(page, "li[role='option']", timeout_ms=10000)
-        await page.wait_for_timeout(500)  # Ensure the options are fully loaded
+        await page.wait_for_timeout(500)
         await page.locator(f"li[role='option']:has-text('One way')").first.click()
 
         # Set number of passengers (only if different from default)
@@ -688,7 +672,6 @@ async def search_flights_tool_fn(
         }
         
     except Exception:
-        # if error, clean the newly created session
         try: await close_session(sid)
         except: pass
         raise
@@ -776,8 +759,6 @@ async def select_currency_tool_fn(currency: str, session_id: Optional[str] = Non
                 "currency": currency,
             }
     try:
-        # Click the currency dropdown trigger
-        # currency_locator = "button:has-text('Currency')"
         currency_locator = "button[jsname='z2Jm1b']"
         await wait_for_element_to_appear(page, currency_locator, timeout_ms=5000)
         await page.locator(currency_locator).click()
