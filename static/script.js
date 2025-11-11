@@ -624,7 +624,7 @@ async function setCurrency() {
       st2.artifacts = flightPayload;
       saveState(st);
       // render converted flights
-      renderFlightResults(st2.artifacts);
+      renderFlightResults( st2.artifacts || result.artifacts );
     }
     
     // Persist selected currency
