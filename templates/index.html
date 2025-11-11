@@ -14,13 +14,22 @@
   <div class="chat-container">
     <div class="chat-header">
       <span></span>
+      <span></span>
       <p>🌴 Krambil the Travel Planner 🌴</p>
-      <button onclick="resetChat()" class="reset-chat">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-          <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
-        </svg>
-        <span class="reset-tooltip">Reset session!</span>
-      </button>
+      <div class="header-button">
+        <button onclick="showCurrencyDialog(true)" class="select-currency">
+          <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAACXBIWXMAAAsTAAALEwEAmpwYAAAHPUlEQVR4nOVbaWxXRRD/lRbFKlpbD6IFK01rUARjjNaIBzVqIsEotR6IJSjeAY1osHhLFK+gEBVvEZQQtUHhg4LoBy8Uj4gpSokGUSMVaK1oJS20z0wyTTbj7tvZd5hQf8km/7z/m9nd2dm5dh+wZyESrQ3AegBLAEwEsD/6OSJP2w6gEcAg/E8FEHH7CsBw9EN8IdpmALscQvgNQGXeAxoAoAbALABNAJoBtAPotgxoJ4CtAD4HsBjADQCqMhjDAQAaAGyw9NmSl10oBzAHwC8BaulqXwO4HsB+Kce0N4AXLfwfRYYoA7AAQFcGE5eNtGM6gMIU4ysA8Lrg28ULlhqXsJWNcm4fAjgixTgPBtAheN6UZuJFvOraCfwK4GkAlwIYBeBAXpkSAEcBOAPAXQA+iDFgvwOoSzHmZwS/lUkZ7QNghXLi3wKYEKjCwwDMBfCnhV8PG7ckmCh4bUy68isUE6dtMZXfT4pDALxp4b2bJxOHTQAWApgMoIKfjRV8/jLer+B3iYZondCo/fqMfe0VFgNL2+TMGBo5JprUavGs15iwfN9p8HyTX52Tjx3HMYPZVysbNxvSGl2rq9uuWPk8E49xbAPMPhf9VwJYoNjzoWpP1v90AOewZyDj6sODFjU+IW8BlCuCHDJ4GgwGcA+Anyw8yOrf4qEfyEmNSbc8bwHMUbg6jZsb4TA4ZrtNuRVMmh7D0mcugEJFbE9+3ocKDmulG6LAZw0XMehZLXRYK3jdnpcAahQRnsbXvyvoHgewr8ggGwKM6HWC36fi/8MA1HP094NiwjSP1wBcLWsGszyEFN76cKygId+bFkPZAJrBkSlQCRno2AIlK5o8AqDY3of7jfdp0EciOYZzADSVawzmWEiDipExmj0CoNV1ocZSCOnlZ7Y2ycKDbNB4AM8C+FmhyrvZpjSylqRGm6dDyuZcuIonZqpqd4wARhu0xVwd0uzfOGE0Cb7B6PJ0ojGAZghLhsaHsxXuMqTRAjwHoDQPAZTE0B4KYKbI75v5mWz1XLZ+wdPfNgBvA5gH4F5W9Yf4DGCdJVQ2G22hMaECaPcMqDqG9uKAVXoVwMeO//7g+sDxXESJA+UsV1riBHMLXp6lEaz1RH71bJRkQaPeaNMcmkbP5sdkfHEo4OpRi2NLkH1SYZlHAKSGPkwTNJcZ/5Ww6kq+LSzAtKDc4WELf1qI8zUMGj0C+ETBg4zPDhF1VfEqLbfwXMU1wyzRYKkn7OCMNBYnK1yN5rjpRkHX4Sh3rUpZRvMlUbtFf2t8idwARQDypKLzAkVNoSWHlZe41dLvtT6iBzwD/zvgkGG6w7N0ZbTnNZDh/RZfMabcca4nVdfnosyytxkdRmztQ3Ea044MpKu0eB2vV5jvEUDEq6vBFIuf17q6ITyWH4VvJ3d9X8AWmifGQIezsTiIozCfQaTgx4eVgo6CHK3m+IozG3isPhxuMYjeLLVeoQXdXD53oYgrQSYNRXgaLBbCfod/fyn40epq8L6guyaJ6kSO9oTjSspo8d62ANuxxaD7CMAp/HsUxyM0oae4yKHBTDGWlzVERQDeUgqBzgkuFBMcL96hxAYJBEAV5Nn8+2gkw1hPWS320oEtgnO1dRwIDWefm9T6yzP+vkZjuSjBZYpyiztUozBgO0iLH5pL9KHKczpF0eWMgEiy2BLPBOMCvngUJWx3BPY3jO1Lq8f+aFAk6KhukQglXOaWyYam0VFXEhSy1Y4sZbseZWRaKugoQk2FIazSmwILIVrQmcExAM7lLG6MUZhdKPhS4uPDcZZcJBMUMPMZXKpq9RhIDSYJulcMAYywVJ9OTcCTLn44IU9anCcpygzMVFcqY/lQxkbK3K+LjMtO3wtrvpeC5/NiLLPjJhx5WpxATszoZLlBMQ6KEM9TVoq2xpX3opRNbonNMe+uDYgG6/g02sbnOy6pazBB0LZxfJOLAAh3e96vS+AOpzNtAyc3WhTwnWKzfyrWIE8BlFguKkoLTGoZAtMIhmCKxQ6NzFsAmosWVL0NwSC2NyGCq+YLl2a/S20vRjkIoIyNZRxd0kuQGpRYbo93uq7gRjkIgHCW5/hqpzKISTJ5mf9HnKRZEYnWd6Gg13IvUH3RkPGIwpVR7JAVqh3fDSyL8z6bHDcoOgUTuuQcdNWUk5ClCi1qSnnjtIANntzz1D7z3Chxwoy4tDdEXEJYohBCF6fdIW5uIPt56erMyWuiTytWJ7gjFJfRPWbZVrZGduM9LmPVskCKmUcp5x6TOLyVEZ5U+0Qr34ebBcOOhKe30jBm8ZlNXOtkg6eNOJ0YajkkeYOP0NKglL/jsX0jkKb1sL1J87XJvzDX0tFLMpZOIYg7M9CINg5vkxZMvZ+kbXSEs5M912a0IFU9ifc8eYNveFLdlhVu575XcEpbm9FixKIypha4iy9Dyw8a+x2Gci1dq5b9EoNYTTWfzvVrDOagiGp1dFJru2C5x+AfBZo4V74155cAAAAASUVORK5CYII=" alt="currency-exchange">
+          <span class="selected-dot hidden" style="margin: 0px 3px;">•</span> 
+          <span class="selected-currency hidden"></span>
+        </button>
+        
+        <button onclick="resetChat()" class="reset-chat">
+          <svg style="width: 26px; height: 26px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+          </svg>
+          <span class="reset-tooltip">Reset session!</span>
+        </button>
+      </div>  
     </div>
     <div class="chat-messages" id="chatMessages"></div>
     <div class="chat-input">
@@ -32,8 +41,22 @@
     </div>
   </div>
 
+  <dialog id="currencyDialog">
+    <div class="currency-dialog">
+      <div class="currency-search">
+        <input type="text" placeholder="Search currency or code…" data-role="search">
+      </div>
+      <div class="currency-list" id="currencyList"></div>
+      <div class="currency-footer">
+        <button onclick="showCurrencyDialog(false)" class="currency-button cancel" data-action="cancel">Cancel</button>
+        <button onclick="setCurrency()" class="currency-button ok" data-action="ok">OK</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="{{ url_for('static', filename='marked.umd.js') }}"></script>
+  <script src="{{ url_for('static', filename='purify.min.js') }}"></script>
   <script src="{{ url_for('static', filename='script.js') }}"></script>
-  <script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+
 </body>
 </html>

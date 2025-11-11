@@ -17,17 +17,17 @@ class FlightSearchInput(BaseModel):
     infants_on_lap: int = Field(0, ge=0)
     infants_in_seat: int = Field(0, ge=0)
     headless: bool = True
-    session_id: str = Field(default=None)
+    session_id: Optional[str] = None
 
 class GetFlightURLsInput(BaseModel):
-    session_id: str
+    session_id: Optional[str]
     flight_no: Optional[int|str] = 1
     max_providers: Optional[int] = 5
     popup_wait_timeout: int = 10000
 
 class SelectCurrencyInput(BaseModel):
-    session_id: str
+    session_id: Optional[str]
     currency: str
-
+    
 class CloseSessionInput(BaseModel):
-    session_id: str
+    session_id: Optional[str]

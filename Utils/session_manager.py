@@ -1,3 +1,4 @@
+from __future__ import annotations
 from uuid import uuid4
 from typing import Any, Dict, Optional
 from pydantic import BaseModel
@@ -19,10 +20,10 @@ class PWSession(BaseModel):
 
     Fields:
       sid:      Unique identifier for this session (UUID string).
-      p:        The top-level Playwright controller (from async_playwright().start()).
       browser:  The launched Chromium/Firefox/WebKit browser instance.
       context:  The BrowserContext created for this session.
       page:     The active Page within the context.
+      p:        The top-level Playwright controller (from async_playwright().start()).
       data:     Free-form dict to store session-related data (inputs, preferences, etc).
     """
     if _V2:
@@ -32,15 +33,23 @@ class PWSession(BaseModel):
             arbitrary_types_allowed = True
 
     sid: str
-    p: Playwright
     browser: Browser
     context: BrowserContext
     page: Page
+    p: Optional[Playwright] = None
     data: Dict[str, Any] = {}
 
 
-SESSIONS: Dict[str, PWSession] = {}
+_SESSIONS: Dict[str, PWSession] = {}
+_PLAY: Optional[Playwright] = None
+_LOCK = asyncio.Lock()
 
+async def _ensure_playwright() -> Playwright:
+    """Ensure that the global Playwright driver is started and return it."""
+    global _PLAY
+    if _PLAY is None:
+        _PLAY = await async_playwright().start()
+    return _PLAY
 
 async def create_session(headless: bool = True) -> str:
     """
@@ -58,13 +67,14 @@ async def create_session(headless: bool = True) -> str:
     Returns:
       str: The newly created session id (UUID string).
     """
-    p = await async_playwright().start()
-    browser = await p.chromium.launch(headless=headless)
-    context = await browser.new_context()
-    page = await context.new_page()
-    sid = str(uuid4())
-    SESSIONS[sid] = PWSession(sid=sid, p=p, browser=browser, context=context, page=page, data={})
-    return sid
+    async with _LOCK:
+        PLAY = await _ensure_playwright()
+        browser = await PLAY.chromium.launch(headless=headless)
+        context = await browser.new_context()
+        page = await context.new_page()
+        sid = str(uuid4())
+        _SESSIONS[sid] = PWSession(sid=sid, p=PLAY, browser=browser, context=context, page=page, data={})
+        return sid
 
 
 def get_session(sid: str) -> PWSession:
@@ -77,14 +87,14 @@ def get_session(sid: str) -> PWSession:
     Returns:
       PWSession: The live session object.
     """
-    sess = SESSIONS.get(sid)
+    sess = _SESSIONS.get(sid)
     if not sess:
         raise RuntimeError("Session not found or expired. Run search first.")
     return sess
 
 async def close_session(sid: str) -> None:
     """
-    Close and remove a session by sid.
+    Close and remove a session by sid but do not stop global driver.
 
     This attempts to:
       - Close the browser (which also closes all contexts/pages).
@@ -92,7 +102,8 @@ async def close_session(sid: str) -> None:
     Args:
       sid: The session id to close. If it doesn’t exist, this is a no-op.
     """
-    sess = SESSIONS.pop(sid, None)
+    async with _LOCK:
+        sess =  _SESSIONS.pop(sid, None)
     if not sess:
         return
     try:
@@ -102,11 +113,17 @@ async def close_session(sid: str) -> None:
 
 async def close_all_sessions() -> None:
     """Close all live sessions. Safe to call repeatedly."""
-    for sid in list(SESSIONS.keys()):
+    for sid in list(_SESSIONS.keys()):
         try:
             await close_session(sid)
         except Exception:
             pass
+    global _PLAY
+    if _PLAY:
+        try:
+            await _PLAY.stop()
+        finally:
+            _PLAY = None
 
 def close_all_sessions_sync(timeout: float | None = None) -> None:
     """

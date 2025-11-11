@@ -23,7 +23,7 @@ get_flight_urls_tool = StructuredTool.from_function(
 select_currency_tool = StructuredTool.from_function(
     coroutine=select_currency_tool_fn,
     name="select_currency",
-    description="Select the currency for flight prices in an existing session, return updated flight results if there any.",
+    description="Select the currency for flight prices in an existing session or a new session, return updated flight results if there any.",
     args_schema=SelectCurrencyInput,
 )
 
