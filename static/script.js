@@ -18,12 +18,9 @@ function saveState(state) {
 
 function rehydrateUI() {
   const state = loadState();
-
-  // Rebuild chat bubbles (newest at top to match .prepend behavior)
   const chatBox = byId("chatMessages");
   if (chatBox && Array.isArray(state.chat)) {
     chatBox.innerHTML = "";
-    // state.chat is chronological; render in reverse so newest ends up on top via prepend
     state.chat.forEach(item => {
       const b = document.createElement("div");
       b.className = `chat-bubble ${item.role === "user" ? "user-bubble" : "bot-bubble"}`;
@@ -104,7 +101,7 @@ function safeParseMaybeJson(v) {
   return v;
 }
 
-// artifacts -> payload (sometimes nested under .content)
+// artifacts -> payload
 function extractPayload(artifacts) {
   const a = safeParseMaybeJson(artifacts) || {};
   return a.content ?? a;
@@ -157,7 +154,6 @@ function renderFlightResults(artifacts) {
   items.forEach(({ data: f, flightNo, flightKey }) => {
     const card = document.createElement("div");
     card.className = "flight-card";
-    // Important: add stable identifiers for rehydration
     card.dataset.flightNo = String(flightNo);
     card.dataset.flightKey = String(flightKey);
 
@@ -422,7 +418,6 @@ async function sendMessage() {
     // render results on left overlay
     if (data.artifacts) {
       renderFlightResults(data.artifacts);
-      // After re-rendering flight cards, also rehydrate any cached providers
       const stateNow = loadState();
       if (stateNow && stateNow.artifacts === data.artifacts) rehydrateProvidersFromState(stateNow);
     }
@@ -560,7 +555,6 @@ const filterCurrencies = (q) => {
   items.forEach(el => {
     const name = normalize(el.dataset.name);
     const code = normalize(el.dataset.code);
-    // match code or name
     const match = code.includes(query) || name.includes(query);
     el.style.display = match ? '' : 'none';
   });
@@ -594,7 +588,6 @@ async function setCurrency() {
   SENDING = true;
   setSendBtnLoading(SENDING);
 
-  // call API for changing currency in backend
   try {
     const sid = CURRENT_SESSION_ID || null;
     result = await callChat(
