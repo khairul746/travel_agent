@@ -385,6 +385,7 @@ async function sendMessage() {
 
   const input = byId("userInput");
   const msg = (input.value || "").trim();
+
   if (!msg) {
     input.focus();
     return;
@@ -420,7 +421,6 @@ async function sendMessage() {
 
     // render results on left overlay
     if (data.artifacts) {
-      console.log("[artifacts]", data.artifacts);
       renderFlightResults(data.artifacts);
       // After re-rendering flight cards, also rehydrate any cached providers
       const stateNow = loadState();
@@ -605,8 +605,7 @@ async function setCurrency() {
     }
 
     // return converted flight results if any
-    const maybeFlights = result?.flights || null;
-    console.log('Flights', maybeFlights)
+    const maybeFlights = result?.flights;
     if (maybeFlights) {
       // persist rendered flights
       const st = loadState();
