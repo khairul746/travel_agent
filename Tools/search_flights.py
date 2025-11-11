@@ -175,7 +175,7 @@ async def fill_destination(page: Page, destination: str):
     """
     try:
         # Crucial: The space after 'Where to?' is important for the selector.
-        destination_input_selector = "input[aria-label='Where to? ']"
+        destination_input_selector = "input[aria-label^='Where to?']"
         await wait_for_element_to_appear(page, destination_input_selector, timeout_ms=15000)
         
         destination_input_locator = page.locator(destination_input_selector)
@@ -779,7 +779,7 @@ async def select_currency_tool_fn(currency: str, session_id: Optional[str] = Non
         # Click the currency dropdown trigger
         # currency_locator = "button:has-text('Currency')"
         currency_locator = "button[jsname='z2Jm1b']"
-        await wait_for_element_to_appear(page, currency_locator, timeout_ms=3000)
+        await wait_for_element_to_appear(page, currency_locator, timeout_ms=5000)
         await page.locator(currency_locator).click()
 
         # Wait for the options to appear and select the desired currency
