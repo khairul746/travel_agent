@@ -166,8 +166,7 @@ if __name__ == "__main__":
                 if input_message == "quit" or input_message == "exit":
                     break
                 print("Artifacts:")
-                print(collector.events)
-                # print(collector.events[-1]["output"]["content"] if collector.events and "output" in collector.events[-1] else None)
+                print(collector.events[-1]["output"]["content"] if collector.events and "output" in collector.events[-1] else None)
                 
             except Exception as e:
                 print(f"Error: {e}")
