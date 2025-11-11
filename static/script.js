@@ -596,30 +596,41 @@ async function setCurrency() {
 
   // call API for changing currency in backend
   try {
-    const payload = {currency}
-    if (CURRENT_SESSION_ID) payload.session_id = CURRENT_SESSION_ID;
+    const sid = CURRENT_SESSION_ID || null;
+    result = await callChat(
+      `Convert the current currency to ${currency} no matter if the flight results have been there or not. If you need a session, 
+      this is the session_id: ${sid} (it might be None, because of the beginning of the conversation).`
+    );
+    
+    const chatBox = byId("chatMessages");
+    const botBubble = document.createElement("div");
+    botBubble.className = "chat-bubble bot-bubble";
+    botBubble.innerHTML = DOMPurify.sanitize(marked.parse(result.reply)) || "…";
+    chatBox.prepend(botBubble);  
 
-    result = await callSelectCurrency(payload);
-    if (result && result.session_id) {
-      CURRENT_SESSION_ID = result.session_id;
-    }
+    // persist chat
+    const st = loadState();
+    st.chat = st.chat || [];
+    st.chat.push({ role: "bot", text: result.reply || "…", ts: Date.now() });
+    saveState(st)
 
     // return converted flight results if any
-    const maybeFlights = result?.flights;
+    const maybeFlights = result?.artifacts?.flights;
     if (maybeFlights) {
+      const flightPayload = extractPayload(result.artifacts);
+      CURRENT_SESSION_ID = flightPayload.session_id;
       // persist rendered flights
-      const st = loadState();
-      st.artifacts = result;
+      const st2 = loadState();
+      st2.artifacts = flightPayload;
       saveState(st);
       // render converted flights
-      renderFlightResults(st.artifacts);
+      renderFlightResults(st2.artifacts);
     }
-
+    
     // Persist selected currency
-    const st2 = loadState();
-    st2.currency = currency;
-    if (CURRENT_SESSION_ID && !st2.session_id) st2.session_id = CURRENT_SESSION_ID;
-    saveState(st2);
+    const st3 = loadState();
+    st3.currency = currency;
+    saveState(st3);
   } catch (err) {
     alert(err)
     console.error("Select currency failed", err);
@@ -627,6 +638,5 @@ async function setCurrency() {
     currencyDialog.close();
     SENDING = false;
     setSendBtnLoading(SENDING);
-    
   }
 }
