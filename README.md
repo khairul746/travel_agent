@@ -6,7 +6,7 @@ Back-end is Flask that drives Playwright in a background; front-end is a minimal
 ---
 
 ## What this app does
-
+<img src="DemoTravelAgent.gif">
 - **Chat to search**: type a prompt like “Find me a flight from Jakarta to Singapore on September 10”.  
 - **Inline flight cards**: results render as cards over the left overlay, not inside the chat stream.  
 - **Select & get links**: each card has a **Select Flight** button that requests booking/provider links for that option.  
